@@ -31,6 +31,8 @@ stations = {"HOO": {"net": "1G", "loc": "--", "chan" : "LHZ"},
 #create list of stations from "stations" dict
 stationsoptions = list(stations.keys())
 
+global tr #used to store trace of current waveform
+
 # the style arguments for the sidebar. We use position:fixed and a fixed width
 SIDEBAR_STYLE = {
     "position": "fixed",
@@ -97,12 +99,15 @@ def create_waveform_graph(net, sta, chan, starttime, endtime):
     
     df = pd.DataFrame({
         'Time': waveformtimes, 
-        'Data': waveformdata
+        'Data': waveformdata,
     })
 
     fig = px.line(df, x="Time", y="Data", render_mode='webgl')
     print(time.time() - start)
     return fig
+
+def apply_filter(df, freq, corners):
+
 
 
 #Seismic Page Components
