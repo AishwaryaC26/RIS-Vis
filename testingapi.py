@@ -9,7 +9,7 @@ import plotly.express as px
 import pandas as pd
 
 import time
-import vaex
+import matplotlib.pyplot as plt
 
 start = time.time()
 client = Client('IRIS')
@@ -20,14 +20,29 @@ chan = 'LHZ'
 
 #setting start time and end time
 starttime = UTCDateTime('2022-12-01T00:00:00')
-endtime = UTCDateTime('2022-12-25T00:00:00')
+endtime = UTCDateTime('2022-12-05T00:00:00')
 
 
 # query for data
 st = client.get_waveforms(net, sta, loc, chan, starttime, endtime, attach_response = True)
+
+st.spectrogram()
+st.spectrogram(log = True, dbscale = True) #do not plot spectrogram
+
 print(time.time() - start)
 
 tr = st[0]
+
+tr2 = st.copy()
+tr2.filter('bandpass', freqmin=0.04, freqmax=0.07, corners=1, zerophase=True)
+tr2.plot()
+
+
+tr3 = st.copy()
+tr3.filter('bandpass', freqmin=0.04, freqmax=0.07, corners=4, zerophase=True)
+tr3.plot()
+
+
 waveformdata = tr.data
 waveformtimes = tr.times(type="relative")
 # waveformtimes = [tr/86400 for tr in waveformtimes]
@@ -43,3 +58,6 @@ print(time.time() - start)
 
 fig = px.line(df, x="times", y="Data", title='Waveform Data', render_mode='webgl')
 print(time.time() - start)
+
+
+#creating spectrogram
