@@ -28,7 +28,7 @@ client = Client('IRIS') #establish client to access API
 
 ### GLOBAL VARIABLES ###
 
-startdate = date(1, 28, 2022) #change this date to reflect first date of data collection of SGIP
+startdate = date(2022, 1, 1) #change this date to reflect first date of data collection of SGIP
 # this date was chosen specifically to test this application with the ELHT station
 
 # IRIS seismic stations
