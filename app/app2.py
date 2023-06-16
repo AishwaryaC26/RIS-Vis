@@ -168,151 +168,34 @@ datePicker = html.Div(
         min_date_allowed=date(1900, 1, 1),
         max_date_allowed=date.today(),
         initial_visible_month=date(2022, 12, 1),
-        start_date=date(2022, 12, 1), #date.today() - datetime.timedelta(2),
-        end_date=date(2022, 12, 5) #date.today()
+        start_date=date(2022, 12, 1),#date.today() - datetime.timedelta(2),
+        end_date=date(2022, 12, 5)#date.today()
     )
     ], 
      className="mb-4",
 )
 
 #waveform filter settings 
-pickfilter = html.Div([
+dropdown = html.Div(
+    [
         html.Hr(),
-        dbc.Label("Waveform filters:"), 
-        dbc.InputGroup(
-            [
-                dbc.Select(
-                    options=[
-                        {"label": 'None', "value": 'None'},
-                        {"label": 'bandpass', "value": 'bandpass'},
-                        {"label": 'bandstop', "value": 'bandstop'},
-                        {"label": 'lowpass', "value": 'lowpass'},
-                        {"label": 'highpass', "value": 'highpass'},
-                    ], id = "filterselect", value="None"
-                ),
-            ]
-        ),
-        html.Div([
-        html.Br(),
-        dbc.Label("Filter settings:"),
+        dbc.Label("Select waveform settings:"), 
+        dcc.Checklist(['bandpass', 'bandstop', 'lowpass', 'highpass'], ['Montreal'])
 
-        dbc.InputGroup(
-            [dbc.InputGroupText("Minimum Frequency", id = "minfreqtext"), dbc.Input(placeholder="0.1", type = "number", id = "minfreqinput"), 
-            dbc.FormFeedback("Please input a value.", type="invalid",),],
-            className="mb-3",
-        ),
-        dbc.InputGroup(
-            [dbc.InputGroupText("Maximum Frequency"), dbc.Input(placeholder="0.1", type = "number", id = "maxfreqinput"), dbc.FormFeedback("Please input a value.", type="invalid",),],
-            className="mb-3",
-            id = "maxfreq"
-        ),
-        dbc.InputGroup(
-            [ dbc.InputGroupText("Sampling Rate"), dbc.Input(placeholder="5", type = "number", id = "samplingrateinput"), dbc.FormFeedback("Please input a value.", type="invalid",),],
-            className="mb-3",
-        ),
-        dbc.InputGroup(
-            [dbc.InputGroupText("Corners"), dbc.Input(placeholder="4", type = "number", id = "cornersinput"), dbc.FormFeedback("Please input a value.", type="invalid",),],
-            className="mb-3",
-        ), 
-         dbc.InputGroup(
-            [
-                dbc.InputGroupText("Zerophase"),
-                dbc.Select(
-                    options=[
-                        {"label": "Yes", "value": True},
-                        {"label": "No", "value": False},
-                    ], value="No"
-                ),
-            ]
-        ),
+
     ],
-            hidden=True,
-            id="filtersettingsdiv",
-            className="mb-4",
-        )
-    ]
+    className="mb-4",
 )
 
 
-#callback so that filter settings only pops up when filter is chosen 
-@app.callback(
-        Output("filtersettingsdiv", "hidden"),
-        Output("maxfreq", "hidden"),
-        Output("minfreqtext", "value"),
-        Input("filterselect", "value"),
+#Applying Filters
+#filterPicker = 
+
+controls = dbc.Card(dbc.Row(
+    [dropdown, datePicker]),
+    body=True,
 )
-def update_filter_form(value):
-    retthis = "Maximum Frequency"
-    if value == "highpass" or value == "lowpass":
-        retthis = "Corner Frequency"
-    return value == "None" or value == None, value == "highpass" or value == "lowpass", retthis 
 
-spectrogramfilters = html.Div([
-    html.Hr(),
-    dbc.Label("Spectogram Filters:"),
-    dbc.InputGroup(
-            [
-                dbc.InputGroupText("Log"),
-                dbc.Select(
-                    options=[
-                        {"label": "Yes", "value": True},
-                        {"label": "No", "value": False},
-                    ],  value="No"
-                ),
-            ], 
-            className="mb-3",
-        ), 
-    dbc.InputGroup(
-            [
-                dbc.InputGroupText("Dbscale"),
-                dbc.Select(
-                    options=[
-                        {"label": "Yes", "value": True},
-                        {"label": "No", "value": False},
-                    ], value="No"
-                ),
-            ], 
-            className="mb-3",
-        ),
-])
-
-#creating a form with all of the inputs
-controls = dbc.Card([dbc.Form( [dropdown, datePicker, pickfilter, spectrogramfilters, dbc.Button("Submit", color="primary", 
-                                        className="mb-3", id = "formsubmitbut", disabled=True)])], body = True)
-
-
-#callbacks to check that all inputs are present when submit is pressed
-@app.callback(
-    Output("minfreqinput", "invalid"),
-    Output("maxfreqinput", "invalid"),
-    Output("samplingrateinput", "invalid"),
-    Output("cornersinput", "invalid"),
-    Input("minfreqinput", "value"),
-    Input("maxfreqinput", "value"),
-    Input("samplingrateinput", "value"),
-    Input("cornersinput", "value"),
-)
-def check_incorrect_input(minfreq, maxfreq, samplingrate, corners):
-    return not minfreq, not maxfreq, not samplingrate, not corners
-
-
-#callback for submit button
-@app.callback(
-    Output("formsubmitbut", "disabled"),
-    Input("minfreqinput", "value"),
-    Input("maxfreqinput", "value"),
-    Input("samplingrateinput", "value"),
-    Input("cornersinput", "value"),
-    Input("filterselect", "value"), 
-)
-def make_submit_visible(minfreqinput, maxfreqinput, samplingrateinput, cornersinput, filterselect):
-    if filterselect=="None":
-        return False
-    elif filterselect == "lowpass" or filterselect == "highpass":
-        return not (minfreqinput and samplingrateinput and cornersinput and filterselect)
-    if minfreqinput and maxfreqinput and samplingrateinput and cornersinput and filterselect:
-        return False
-    return True 
 
 waveform_graph = dbc.Card([html.H3("Waveform"), dcc.Loading(
     children=[dcc.Graph(id="waveformgraph"),],
@@ -323,7 +206,7 @@ spectogram_graph = dbc.Card([html.H3("Spectrogram"), dcc.Loading(
                 id='spectrogram', srcDoc=None,  
                 style={'border-width': '5', 'width': '100%',
                        'height': '500px'})], type="circle"  
-                )], body = True, style={"width": "50%"})
+                )], body = True, )
 
 tabs = dbc.Card([html.H3("Waveform Data", className="display-6"), 
                  dcc.Loading(
@@ -350,6 +233,7 @@ def update_seismometer_graph(start_date, end_date, dropdownvalue):
     end_date = UTCDateTime(end_date + 'T00:00:00')
     results = create_waveform_graph(stations[dropdownvalue]["net"], dropdownvalue, stations[dropdownvalue]["chan"], start_date, end_date)
     return results[1], create_spectrogram(results[0])
+
 
 
 #page callback- establishes different pages of website
@@ -384,60 +268,3 @@ def render_page_content(pathname):
 if __name__ == "__main__":
     app.run_server(debug=True)
 
-'''import numpy as np
-import obspy
-
-from obspy.core import UTCDateTime
-from obspy.clients.fdsn import Client
-
-from dash import Dash, html, dcc
-import plotly.express as px
-import pandas as pd
-
-
-# Initialize the app
-app = Dash(__name__)
-
-client = Client('IRIS')
-net = '2H'
-sta = 'CONZ'
-loc = '--'
-chan = 'LHZ'
-
-#setting start time and end time
-starttime = UTCDateTime('2022-12-01T00:00:00')
-endtime = UTCDateTime('2022-12-03T00:00:00')
-
-# query for data
-st = client.get_waveforms(net, sta, loc, chan, starttime, endtime, attach_response = True)
-
-st_flt = st.copy()
-st_flt = st_flt.filter('bandpass', freqmin = 0.001, freqmax = 0.1)
-
-st_disp = st_flt.copy()
-#st_disp = st_disp.remove_response(output = "DISP") 
-
-tr = st_disp[0]
-waveformdata = tr.data
-waveformtimes = tr.times(type="utcdatetime")
-
-df = pd.DataFrame({
-    'times': waveformtimes, 
-    'Data': waveformdata
-})
-
-
-fig = px.line(df, x="times", y="Data", title='Waveform Data')
-
-app.layout = html.Div(children=[
-    html.H1(children='Test Seismic Data'),
-    dcc.Graph(
-        id='example-graph',
-        figure=fig
-    )
-])
-
-
-if __name__ == '__main__':
-    app.run_server(debug=True)
-'''
