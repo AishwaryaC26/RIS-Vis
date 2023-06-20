@@ -6,7 +6,7 @@ Built by: Aishwarya Chakravarthy
 import time
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, dcc, html
+from dash import Input, Output, dcc, html, State
 import obspy
 
 from obspy.core import UTCDateTime
@@ -19,6 +19,10 @@ from datetime import date
 
 import mpld3     
 import matplotlib
+import matplotlib.pyplot as plt
+
+from obspy.signal import PPSD
+
 
 matplotlib.use('agg') # prevents matplotlib from plotting 
 
@@ -94,16 +98,22 @@ app.layout = html.Div([dcc.Location(id="url"), sidebar, content])
 #all calculative methods
 
 #method to create waveform
-def create_waveform_graph(net, sta, chan, starttime, endtime):
-    start = time.time()
+def create_waveform_graph(net, sta, chan, starttime, endtime, filterselect, minfreq, maxfreq, 
+                          cornersinp, zerophase):
     # query for data
     try: 
         st = client.get_waveforms(net, sta, '--', chan, starttime, endtime, attach_response = True)
+        inv = client.get_stations(network=net,station= sta, channel=chan, starttime=starttime, endtime=endtime, level = "response")
+
     except obspy.clients.fdsn.header.FDSNNoDataException as e:
         st = None
+        #inv = None
         return [st, px.line()]
-    waveformdata = st[0].data
-    waveformtimes = st[0].times(type="relative")
+
+    filtered_data = apply_filter(st, filterselect, minfreq, maxfreq, cornersinp, zerophase)
+
+    waveformdata = filtered_data[0].data
+    waveformtimes = filtered_data[0].times(type="relative")
     waveformtimes = [tr/86400 for tr in waveformtimes]
     
     df = pd.DataFrame({
@@ -112,17 +122,35 @@ def create_waveform_graph(net, sta, chan, starttime, endtime):
     })
 
     fig = px.line(df, x="Time (in days)", y="Amplitude",render_mode='webgl')
-    print(time.time() - start)
-    return [st, fig]
+    return [filtered_data, fig]
 
-#def apply_filter(df, freq, corners):
+# method to apply filter to waveform
+def apply_filter(data, filtertype, minfreq, maxfreq, corners, zerophase):
+    zerophase = True if zerophase == "Yes" else False
+    if filtertype == "bandpass" or filtertype == "bandstop":
+        data.filter(type=filtertype, freqmin = minfreq, freqmax = maxfreq,
+                    corners = corners, zerophase = zerophase)
+        return data
+    elif filtertype == "lowpass" or filtertype == "highpass":
+        data.filter(type = filtertype, freq = minfreq, corners = corners, 
+                    zerophase = zerophase)
+    return data
+    
 
-def create_spectrogram(currentwave):
+def create_spectrogram(currentwave, dbscaleinp):
     #using currentwave variable- which represents the current waveform user is examining
     if not currentwave:
         return "No Data Found"
-    return mpld3.fig_to_html(currentwave.spectrogram(show=False)[0])
+    dbscaleinp = True if dbscaleinp=="Yes" else False
+    return mpld3.fig_to_html(currentwave.spectrogram(show=False, dbscale = dbscaleinp)[0])
 
+
+#creating the PSD
+def create_psd(currentwave, inventory):
+    tr = currentwave[0]
+    ppsd = PPSD(tr.stats, metadata=inv)
+    ppsd.add(currentwave)
+    ppsd.plot(show=False)
 
 
 #Seismic Page Components
@@ -183,11 +211,11 @@ pickfilter = html.Div([
             [
                 dbc.Select(
                     options=[
-                        {"label": 'None', "value": 'None'},
-                        {"label": 'bandpass', "value": 'bandpass'},
-                        {"label": 'bandstop', "value": 'bandstop'},
-                        {"label": 'lowpass', "value": 'lowpass'},
-                        {"label": 'highpass', "value": 'highpass'},
+                        {"label": 'None'},
+                        {"label": 'bandpass'},
+                        {"label": 'bandstop'},
+                        {"label": 'lowpass'},
+                        {"label": 'highpass'},
                     ], id = "filterselect", value="None"
                 ),
             ]
@@ -207,10 +235,6 @@ pickfilter = html.Div([
             id = "maxfreq"
         ),
         dbc.InputGroup(
-            [ dbc.InputGroupText("Sampling Rate"), dbc.Input(placeholder="5", type = "number", id = "samplingrateinput"), dbc.FormFeedback("Please input a value.", type="invalid",),],
-            className="mb-3",
-        ),
-        dbc.InputGroup(
             [dbc.InputGroupText("Corners"), dbc.Input(placeholder="4", type = "number", id = "cornersinput"), dbc.FormFeedback("Please input a value.", type="invalid",),],
             className="mb-3",
         ), 
@@ -219,9 +243,9 @@ pickfilter = html.Div([
                 dbc.InputGroupText("Zerophase"),
                 dbc.Select(
                     options=[
-                        {"label": "Yes", "value": True},
-                        {"label": "No", "value": False},
-                    ], value="No"
+                        {"label": "Yes"},
+                        {"label": "No"},
+                    ], value="No", id = "zerophaseinput",
                 ),
             ]
         ),
@@ -238,11 +262,11 @@ pickfilter = html.Div([
 @app.callback(
         Output("filtersettingsdiv", "hidden"),
         Output("maxfreq", "hidden"),
-        Output("minfreqtext", "value"),
+        Output("minfreqtext", "children"),
         Input("filterselect", "value"),
 )
 def update_filter_form(value):
-    retthis = "Maximum Frequency"
+    retthis = "Minimum Frequency"
     if value == "highpass" or value == "lowpass":
         retthis = "Corner Frequency"
     return value == "None" or value == None, value == "highpass" or value == "lowpass", retthis 
@@ -252,24 +276,12 @@ spectrogramfilters = html.Div([
     dbc.Label("Spectogram Filters:"),
     dbc.InputGroup(
             [
-                dbc.InputGroupText("Log"),
-                dbc.Select(
-                    options=[
-                        {"label": "Yes", "value": True},
-                        {"label": "No", "value": False},
-                    ],  value="No"
-                ),
-            ], 
-            className="mb-3",
-        ), 
-    dbc.InputGroup(
-            [
                 dbc.InputGroupText("Dbscale"),
                 dbc.Select(
                     options=[
-                        {"label": "Yes", "value": True},
-                        {"label": "No", "value": False},
-                    ], value="No"
+                        {"label": "Yes"},
+                        {"label": "No"},
+                    ], value="No", id="dbscaleinput"
                 ),
             ], 
             className="mb-3",
@@ -285,34 +297,45 @@ controls = dbc.Card([dbc.Form( [dropdown, datePicker, pickfilter, spectrogramfil
 @app.callback(
     Output("minfreqinput", "invalid"),
     Output("maxfreqinput", "invalid"),
-    Output("samplingrateinput", "invalid"),
     Output("cornersinput", "invalid"),
     Input("minfreqinput", "value"),
     Input("maxfreqinput", "value"),
-    Input("samplingrateinput", "value"),
     Input("cornersinput", "value"),
 )
-def check_incorrect_input(minfreq, maxfreq, samplingrate, corners):
-    return not minfreq, not maxfreq, not samplingrate, not corners
+def check_incorrect_input(minfreq, maxfreq, corners):
+    return not minfreq, not maxfreq, not corners
 
 
-#callback for submit button
+#callback for submit button visibility
 @app.callback(
     Output("formsubmitbut", "disabled"),
     Input("minfreqinput", "value"),
     Input("maxfreqinput", "value"),
-    Input("samplingrateinput", "value"),
     Input("cornersinput", "value"),
     Input("filterselect", "value"), 
 )
-def make_submit_visible(minfreqinput, maxfreqinput, samplingrateinput, cornersinput, filterselect):
+def make_submit_visible(minfreqinput, maxfreqinput, cornersinput, filterselect):
     if filterselect=="None":
         return False
     elif filterselect == "lowpass" or filterselect == "highpass":
-        return not (minfreqinput and samplingrateinput and cornersinput and filterselect)
-    if minfreqinput and maxfreqinput and samplingrateinput and cornersinput and filterselect:
+        return not (minfreqinput and cornersinput and filterselect)
+    if minfreqinput and maxfreqinput and cornersinput and filterselect:
         return False
     return True 
+
+
+#callback to remove all values in form if filter is changed
+@app.callback(
+    Output("minfreqinput", "value"),
+    Output("maxfreqinput", "value"),
+    Output("cornersinput", "value"),
+    Output("zerophaseinput", "value"),
+    Output("dbscaleinput", "value"),
+    Input("filterselect", "value")
+   
+)
+def remove_form_filters(filter_val):
+    return "", "", "", "No", "No"
 
 waveform_graph = dbc.Card([html.H3("Waveform"), dcc.Loading(
     children=[dcc.Graph(id="waveformgraph"),],
@@ -341,15 +364,25 @@ tabs = dbc.Card([html.H3("Waveform Data", className="display-6"),
 @app.callback(
         Output("waveformgraph", "figure"),
         Output("spectrogram", "srcDoc"),
-        Input("timeframepicker", "start_date"),
-        Input("timeframepicker", "end_date"),
-        Input("dropdownseismic", "value")
+        State("timeframepicker", "start_date"),
+        State("timeframepicker", "end_date"),
+        State("dropdownseismic", "value"),
+        State("filterselect", "value"),
+        State("minfreqinput", "value"),
+        State("maxfreqinput", "value"),
+        State("cornersinput", "value"),
+        State("zerophaseinput", "value"),
+        State("dbscaleinput", "value"),
+        Input("formsubmitbut", "n_clicks")
 )
-def update_seismometer_graph(start_date, end_date, dropdownvalue):
+def update_seismometer_graph(start_date, end_date, dropdownvalue, 
+                             filterselect, minfreq, maxfreq, cornersinp, zerophase,
+                             dbscaleinp, n_clicks):
     start_date = UTCDateTime(start_date + 'T00:00:00')
     end_date = UTCDateTime(end_date + 'T00:00:00')
-    results = create_waveform_graph(stations[dropdownvalue]["net"], dropdownvalue, stations[dropdownvalue]["chan"], start_date, end_date)
-    return results[1], create_spectrogram(results[0])
+    results = create_waveform_graph(stations[dropdownvalue]["net"], dropdownvalue, stations[dropdownvalue]["chan"], start_date, end_date, 
+                                    filterselect, minfreq, maxfreq, cornersinp, zerophase)
+    return results[1], create_spectrogram(results[0], dbscaleinp)
 
 
 #page callback- establishes different pages of website
