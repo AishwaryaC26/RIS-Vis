@@ -36,6 +36,7 @@ def nightly_download_mseed_waveform():
         except obspy.clients.fdsn.header.FDSNNoDataException as e:
             continue
         tr = st[0]
-        st.write("backend/IRIS_seismic_data/downloaded_files/{}/{}.mseed".format(station, date_to_download), format="MSEED") 
+        st.write("/backend/IRIS_seismic_data/downloaded_files/{}/{}.mseed".format(station, date_to_download), format="MSEED") # location in Docker container
+        
 
 
