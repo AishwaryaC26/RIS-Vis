@@ -1,0 +1,7 @@
+# Logs and databases #
+######################
+*.db
+
+# Virtual Environment Folder #
+##############################
+venv/

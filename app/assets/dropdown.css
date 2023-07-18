@@ -1,0 +1,30 @@
+
+/* input box */
+.Select-control {
+    background-color: black;
+}
+
+/* changes the text color of input box */
+.Select-value-label {
+    color: white !important;
+}
+
+.Select--single > .Select-control .Select-value, .Select-placeholder {
+    border: 1px solid grey;
+    border-radius: 4px;
+}
+
+/* dropdown menu options */
+.VirtualizedSelectOption {
+    background-color: black;
+    color: white;
+ }
+
+ .DateRangePickerInput {
+    background-color: black;
+ }
+
+ .DateInput_input {
+    background-color: black;
+    color: white;
+ }
