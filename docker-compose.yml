@@ -4,14 +4,14 @@ services:
     scheduler:
         build: ./backend
         restart: always
-        env_file: .env
+        #env_file: .env
         volumes:
             - ./database:/backend/database
             - ./logs:/backend/logs
     app:
         build: ./app
         restart: always
-        env_file: .env
+        #env_file: .env
         ports: 
           - 8050:8050
         depends_on: 

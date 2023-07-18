@@ -309,8 +309,8 @@ def create_gps_graphs(starttime, endtime, station):
 
     east_fig.update_layout(
     title="East Movement",
-    xaxis_title="Time",
-    yaxis_title="East position",
+    xaxis_title="Date",
+    yaxis_title="East (m)",
     )
 
 
@@ -324,8 +324,8 @@ def create_gps_graphs(starttime, endtime, station):
 
     north_fig.update_layout(
     title="North Movement",
-    xaxis_title="Time",
-    yaxis_title="North position",
+    xaxis_title="Date",
+    yaxis_title="North (m)",
     )
 
     up_fig = go.Figure()
@@ -338,8 +338,8 @@ def create_gps_graphs(starttime, endtime, station):
 
     up_fig.update_layout(
     title="Up Movement",
-    xaxis_title="Time",
-    yaxis_title="Up position",
+    xaxis_title="Date",
+    yaxis_title="Up (m)",
     )
 
     east_fig.update_layout(template='plotly_dark')

@@ -41,15 +41,18 @@ from datetime import date, timedelta, datetime
 #database imports 
 import sqlite3
 
+import flask
+
 load_dotenv() ## loads variables from environment file
 
 ### basic definitions and set up
 redis_host = os.environ['CACHE_REDIS_HOST']
-app = DashProxy(__name__, transforms=[ServersideOutputTransform(backends=[RedisBackend(host = redis_host)])], external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
+server = flask.Flask(__name__)
+app = DashProxy(__name__, server = server, transforms=[ServersideOutputTransform(backends=[RedisBackend(host = redis_host)])], external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
 
 
 ## creates redis cache with configuration described in .env file
-cache = Cache(app.server, config={
+cache = Cache(server, config={
     'CACHE_TYPE':os.environ['CACHE_TYPE'],
     'CACHE_REDIS_HOST':os.environ['CACHE_REDIS_HOST'],
     'CACHE_REDIS_PORT':os.environ['CACHE_REDIS_PORT'],
@@ -223,17 +226,17 @@ def create_gps_five_days():
         stations.append(res[4])
 
     df = pd.DataFrame({
-        'Time': times,
-        'East': east, 
-        'North': north, 
-        'Up': up, 
+        'Date': times,
+        'East (m)': east, 
+        'North (m)': north, 
+        'Up (m)': up, 
         'Station': stations
     })
 
     ## creating 3 figures for all 3 locations
-    fig_east = px.line(df, x="Time", y="East", color="Station")
-    fig_north = px.line(df, x="Time", y="North", color="Station")
-    fig_up = px.line(df, x="Time", y="Up", color="Station")
+    fig_east = px.line(df, x="Date", y="East (m)", color="Station")
+    fig_north = px.line(df, x="Date", y="North (m)", color="Station")
+    fig_up = px.line(df, x="Date", y="Up (m)", color="Station")
 
     fig_east.update_layout(template='plotly_dark')
     fig_north.update_layout(template='plotly_dark')
