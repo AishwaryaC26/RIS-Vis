@@ -58,15 +58,6 @@ if __name__ == '__main__':
     create_table(conn, """CREATE TABLE IF NOT EXISTS gps_data (
     timestamp TEXT,
     station TEXT,
-    east REAL, 
-    north REAL, 
-    up REAL, 
-    PRIMARY KEY (timestamp, station)
-    ); """)
-
-    create_table(conn, """CREATE TABLE IF NOT EXISTS gps_data2 (
-    timestamp TEXT,
-    station TEXT,
     eastingsi REAL, 
     eastingsf REAL, 
     northingsi REAL,

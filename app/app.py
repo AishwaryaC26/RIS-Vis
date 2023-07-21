@@ -1,7 +1,7 @@
 #Plotly Dash related imports
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, dcc, html, State, no_update, callback_context, CeleryManager
+from dash import Input, Output, dcc, html, State, no_update, callback_context, CeleryManager, ctx
 from trace_updater import TraceUpdater
 import plotly.graph_objects as go
 from plotly_resampler import FigureResampler
@@ -20,7 +20,7 @@ from celery import Celery
 
 #component imports from other files
 import seismic, weather, gps, elementstyling, gpsvis
-import calculations
+import calculations, componentbuilder
 
 #Obspy (seismic data processing library) imports 
 from obspy.core import UTCDateTime
@@ -37,6 +37,7 @@ from pyowm.owm import OWM
 import time
 import pandas as pd
 from datetime import date, timedelta, datetime
+import math
 
 #database imports 
 import sqlite3
@@ -48,7 +49,7 @@ load_dotenv() ## loads variables from environment file
 ### basic definitions and set up
 redis_host = os.environ['CACHE_REDIS_HOST']
 server = flask.Flask(__name__)
-app = DashProxy(__name__, server = server, transforms=[ServersideOutputTransform(backends=[RedisBackend(host = redis_host)])], external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
+app = DashProxy(__name__, server = server, transforms=[ServersideOutputTransform(backends=[RedisBackend(host = redis_host)])], external_stylesheets=[dbc.themes.DARKLY, dbc.icons.FONT_AWESOME], suppress_callback_exceptions=True)
 
 
 ## creates redis cache with configuration described in .env file
@@ -195,72 +196,44 @@ def get_future_weather_data():
 
     return output
 
-#@cache.memoize(timeout=21600) # refreshes every 6 hours
-def create_gps_five_days():
-    ## attempts to pull gps data from past 5 days from the database
-    starttime = str(date.today() - timedelta(days=365))[:10]
-    endtime = str(date.today() - timedelta(days=360))[:10]
+## creates spectrogram for past 3 days given list of stations
 
-    #starttime = str(date.today())[:10]
-    #endtime = str(date.today() - timedelta(days=5))[:10]
+@cache.memoize(timeout=21600)
+def create_spec_three_days(stations):
+    print("getting called hehe no", flush = True)
+    figs = []
+    for station in stations:
+        starttime = str(date.today() - timedelta(days=365))[:10]
+        endtime = str(date.today() - timedelta(days=360))[:10]
 
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
-
-    query = f"""SELECT timestamp, eastingsf, northingsf, verticalf, station
-    FROM gps_data WHERE timestamp >= ? AND timestamp <= ?; """
-    query_inputs  = (starttime, endtime)
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
-
-    if not all_results:
-        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
-    
-    ## creating dataframe with all data
-    times, east, north, up, stations = [], [], [], [], []
-    for res in all_results:
-        times.append(res[0])
-        east.append(res[1])
-        north.append(res[2])
-        up.append(res[3])
-        stations.append(res[4])
-
-    df = pd.DataFrame({
-        'Date': times,
-        'East (m)': east, 
-        'North (m)': north, 
-        'Up (m)': up, 
-        'Station': stations
-    })
-
-    ## creating 3 figures for all 3 locations
-    fig_east = px.line(df, x="Date", y="East (m)", color="Station")
-    fig_north = px.line(df, x="Date", y="North (m)", color="Station")
-    fig_up = px.line(df, x="Date", y="Up (m)", color="Station")
-
-    fig_east.update_layout(template='plotly_dark')
-    fig_north.update_layout(template='plotly_dark')
-    fig_up.update_layout(template='plotly_dark')
-
-    conn.close()
-    return dcc.Graph(figure = fig_east), dcc.Graph(figure = fig_north), dcc.Graph(figure = fig_up)
-
+        #starttime = str(date.today() - timedelta(days=3))[:10]
+        #endtime = str(date.today())[:10]
+        
+        all_results = calculations.check_database(station, starttime, endtime)
+        if not all_results:
+            figs.append(dbc.Label("No data was found"))
+            continue
+        stream = calculations.create_stream(all_results)
+        if not stream:
+            figs.append(dbc.Label("No data was found"))
+            continue
+        figs.append(calculations.create_spectrogram(stream))
+    while len(figs) < 3:
+        figs.append(None)
+    return figs
 
 ### Home Page Components ###
 
 # Weather Section
 
-weather_title = html.H5("Weather", style = elementstyling.MARGIN_STYLE)
-
 def get_current_weather():
     ## creates current weather component
     allweatherdict = get_weather_data()
-    current_weather_left_side = dbc.Col([html.H2(weather_loc_name), f"""Latitude: {weather_coords[0]}, Longitude: {weather_coords[1]} """, html.Br(),
-                                       ], width = 6,  style={"text-align": "center"})
-    current_weather_right_side = dbc.Col([f"""Current Temperature: {allweatherdict["current temp"]} C""", html.Br(),
+    current_weather = html.Div([html.H2(weather_loc_name), f"""Latitude: {weather_coords[0]}, Longitude: {weather_coords[1]} """, html.Hr(), 
+                                         f"""Current Temperature: {allweatherdict["current temp"]} C""", html.Br(),
                                          f"""Feels like: {allweatherdict["feels like"]} C""", html.Br(),
-                                      f"""Wind Speed: {allweatherdict["wind speed"]} m/s""", html.Br(), f"""Pressure: {allweatherdict["pressure"]} hPa"""], width = 6, style={"text-align": "center"})
-    return  dbc.Card([dbc.Row([current_weather_left_side, current_weather_right_side])],  body=True, style=elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)
+                                      f"""Wind Speed: {allweatherdict["wind speed"]} m/s""", html.Br(), f"""Pressure: {allweatherdict["pressure"]} hPa"""], style={"text-align": "center"})
+    return  dbc.Card([current_weather],  body=True, )
 
 
 def get_weather_predictions():
@@ -274,91 +247,125 @@ def get_weather_predictions():
                                allweatherdict["description_threeday"], html.Br(), f"""{allweatherdict["temperature_threeday"]} C"""], body = True)
     weather_fourday = dbc.Card([allweatherdict["date_fourday"], html.Br(), html.Img(src=allweatherdict["img_fourday"]), html.Br(),
                                allweatherdict["description_fourday"], html.Br(), f"""{allweatherdict["temperature_fourday"]} C"""], body = True)
-    return dbc.Card([dbc.Row([dbc.Col(weather_oneday, style={"text-align": "center"}), dbc.Col(weather_twoday, style={"text-align": "center"}),
+    return dbc.Row([dbc.Col(weather_oneday, style={"text-align": "center"}), dbc.Col(weather_twoday, style={"text-align": "center"}),
                                           dbc.Col(weather_threeday, style={"text-align": "center"}),dbc.Col(weather_fourday, style={"text-align": "center"}),
-                                          ])],  body=True, style=elementstyling.CARD_HALF_WIDTH_RIGHT_DOWNUP)
+                                          ])
+def get_map_component():
+    location= [weather_coords]
+    df = pd.DataFrame(location, columns=['Latitude', 'Longitude'])
 
-def get_weather_row():
-    return dbc.Row([dbc.Col([get_current_weather()], width = 5), dbc.Col([get_weather_predictions()], width = 7)])
+    fig = px.scatter_mapbox(df, lat="Latitude", lon="Longitude", zoom=1, height=245)
+    fig.update_layout(
+        mapbox_style="white-bg",
+        mapbox_layers=[
+            {
+                "below": 'traces',
+                "sourcetype": "raster",
+                "sourceattribution": "United States Geological Survey",
+                "source": [
+                    "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"
+                ]
+            }
+        ])
+    fig.update_traces(marker=dict(
+        size = 20
+    ),)
+    fig.update_layout(
+    margin=dict(l=5,r=5,b=5,t=20),
+    )
+    fig.update_layout(template='plotly_dark')
+    return dcc.Graph(figure = fig)
+
+def get_weather_row(card_desc):
+    weather_row = dbc.Row([dbc.Col([get_current_weather()], width = 3), dbc.Col([get_map_component()], width = 3), dbc.Col([get_weather_predictions()], width = 6)])
+    weather_component = html.Div([html.Br(), dbc.Row([dbc.Col(html.H4("Weather Data", className="card-title"), width = 6), 
+            dbc.Col(html.Div([ dbc.Button(html.I(className="fas fa-question", style={'fontSize': '30px'}), id="weather-q-id", n_clicks=0, style =  elementstyling.IMG_STYLING),], style = {"float": "right"}), width = 6)]),
+            dbc.Modal(
+                [
+                dbc.ModalHeader([html.H4("Description", className="card-title")]),
+                card_desc
+                ],
+                id="weather-q-modal-id",
+                is_open=False,
+                size="xl",
+                keyboard=False,
+                backdrop="static",
+            ),
+        dbc.Spinner([html.Div([weather_row])], color="primary"), 
+        html.Br(), ], style=None)
+    return weather_component
    
 # File Download Section
 
-file_download_title = html.H5("Recently Downloaded Files", style = elementstyling.MARGIN_STYLE)
+def get_log_tables(card_desc):
 
-def get_log_tables():
     seismic_log_table = calculations.read_file("logs/seismic_log.txt")
-    seismic_data_downloads = dbc.Card(["Seismic Data", html.Br(),html.Br(), seismic_log_table],  body=True, style = elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)
+    seismic_data_downloads = dbc.Card([html.H4("Seismic Data Download Table"), html.Br(), seismic_log_table],  body=True)
 
     gps_log_table = calculations.read_file("logs/gps_log.txt")
-    gps_data_downloads = dbc.Card(["GPS Data Download Table", html.Br(),html.Br(), gps_log_table],  body=True, style = elementstyling.CARD_HALF_WIDTH_DOWNUP)
+    gps_data_downloads = dbc.Card([html.H4("GPS Data Download Table"), html.Br(), gps_log_table],  body=True)
 
     weather_log_table = calculations.read_file("logs/weather_log.txt", "weather")
-    weather_data_downloads = dbc.Card(["Weather Data Download Table", html.Br(),html.Br(), weather_log_table],  body=True, style = elementstyling.CARD_HALF_WIDTH_RIGHT_DOWNUP)
+    weather_data_downloads = dbc.Card([html.H4("Weather Data Download Table"), html.Br(), weather_log_table],  body=True)
 
-    return dbc.Row([dbc.Col(seismic_data_downloads, width = 4), dbc.Col(gps_data_downloads, width = 3), dbc.Col(weather_data_downloads, width = 5)])
+    log_components =  dbc.Row([dbc.Col(seismic_data_downloads, width = 4), dbc.Col(gps_data_downloads, width = 3), dbc.Col(weather_data_downloads, width = 5)])
+
+    full_card = html.Div([dbc.Row([dbc.Col(html.H4("Recently Downloaded Files", className="card-title"), width = 6), 
+            dbc.Col(html.Div([ dbc.Button(html.I(className="fas fa-question", style={'fontSize': '30px'}), id="log-q-id", n_clicks=0, style =  elementstyling.IMG_STYLING),], style = {"float": "right"}), width = 6)]),
+            dbc.Modal(
+                [
+                dbc.ModalHeader([html.H4("Description", className="card-title")]),
+                card_desc
+                ],
+                id="log-q-modal-id",
+                is_open=False,
+                size="xl",
+                keyboard=False,
+                backdrop="static",
+            ),
+        dbc.Spinner([html.Div([log_components])], color="primary"), ], style=None)
+    return full_card
 
 # Seismic Data Section
+## let's replace this to make it easier to understand
 
-seismic_data_title = html.H5("Seismic Data", style = elementstyling.MARGIN_STYLE)
+def build_summaryspec_component(card_desc):
+    num_pages = math.ceil(len(stationsoptions) / 3)
+    #card_title_id, open_expand_button_id, close_expand_button_id, modal_body_id, modal_id, graph_div_id, full_card_id, element_styling = None
+    card_1 = componentbuilder.build_graph_component_noq("sumspec-card1-titleid", "sumspec-card1-expand-button-id", "sumspec-card1-close-button-id", 
+                                                        "sumspec-card1-modalbody-id", "sumspec-card1-modal-id", 
+                                                        "sumspec1", "sumspec-card1-id", None)
+    card_2 = componentbuilder.build_graph_component_noq("sumspec-card2-titleid", "sumspec-card2-expand-button-id", "sumspec-card2-close-button-id", 
+                                                        "sumspec-card2-modalbody-id", "sumspec-card2-modal-id", 
+                                                        "sumspec2", "sumspec-card2-id", None)
+    card_3 = componentbuilder.build_graph_component_noq("sumspec-card3-titleid", "sumspec-card3-expand-button-id", "sumspec-card3-close-button-id", 
+                                                        "sumspec-card3-modalbody-id", "sumspec-card3-modal-id", 
+                                                        "sumspec3", "sumspec-card3-id", None)
 
-#Dropdown to choose seismic station for spectrogram
-home_dropdown_seismic_station_spec = html.Div(
-    [
-        dbc.Label("Select seismic station:"),
-        dcc.Dropdown(
-            stationsoptions,
-            stationsoptions[0],
-            id="dropdownhomeseisspec",
-            clearable=False,
-        ),
-    ],
-)
-
-#Dropdown to choose seismic station for psd
-home_dropdown_seismic_station_psd = html.Div(
-    [
-        dbc.Label("Select seismic station:"),
-        dcc.Dropdown(
-            stationsoptions,
-            stationsoptions[0],
-            id="dropdownhomeseispsd",
-            clearable=False,
-        ),
-    ],
-)
-
-seismic_summary_spectrogram = dbc.Card(["Summary Spectrogram", html.Br(), html.Br(), home_dropdown_seismic_station_spec, html.Br(), dbc.Spinner(html.Div(id = "summaryspec"), color = "primary")],  body=True, style = elementstyling.CARD_HALF_WIDTH_LEFT)
-
-seismic_summary_psd = dbc.Card(["Summary PSD", html.Br(), html.Br(), home_dropdown_seismic_station_psd, html.Br(), dbc.Spinner(html.Div(id = "summarypsd"), color="primary")],  body=True, style = elementstyling.CARD_HALF_WIDTH_RIGHT)
-
-all_seismic_row = dbc.Row([dbc.Col(seismic_summary_spectrogram), dbc.Col(seismic_summary_psd)])
-
-# GPS Data Section
-
-gps_data_title = html.H5("GPS Data", style = elementstyling.MARGIN_STYLE)
-
-gps_summary_movement =  dbc.Card("GPS Summer Movement (over 5 days)",  body=True, style=elementstyling.MARGIN_STYLE)
-
-def get_gps_tables():
-    east_g, north_g, up_g = create_gps_five_days()
-
-    east_graph = dbc.Card(["East Movement", html.Br(),html.Br(), html.Div(children = east_g)],  body=True, style = elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)
-
-    north_graph = dbc.Card(["North Movement", html.Br(),html.Br(), html.Div(children = north_g)],  body=True, style = elementstyling.CARD_HALF_WIDTH_DOWNUP)
-
-    up_graph = dbc.Card(["Up Movement", html.Br(),html.Br(), html.Div(children = up_g)],  body=True, style = elementstyling.CARD_HALF_WIDTH_RIGHT_DOWNUP)
-
-    return dbc.Row([dbc.Col(east_graph, width = 4), dbc.Col(north_graph, width = 4), dbc.Col(up_graph, width = 4)])
+    graphs_card = dbc.Row([dbc.Col(card_1, width = 4), dbc.Col(html.Div(card_2), width = 4), dbc.Col(html.Div(card_3), width = 4)])
+    data_graph = html.Div([dbc.Row([dbc.Col(html.H4("Summary Spectrograms", className="card-title"), width = 6), 
+            dbc.Col(html.Div([ dbc.Button(html.I(className="fas fa-question", style={'fontSize': '30px'}), id="specsum-q-id", n_clicks=0, style =  elementstyling.IMG_STYLING),], style = {"float": "right"}), width = 6)]),
+            dbc.Modal(
+                [
+                dbc.ModalHeader([html.H4("Description", className="card-title")]),
+                card_desc
+                ],
+                id="specsum-q-modal-id",
+                is_open=False,
+                size="xl",
+                keyboard=False,
+                backdrop="static",
+            ),
+        dbc.Spinner([html.Div([graphs_card])], color="primary"), 
+        html.Br(), 
+        html.H6("Slider",),
+        dcc.Slider(min=1, max=num_pages, step=1, value=1, id="specsumslider")], style=None)
+    return data_graph
 
 
 ## Method to get all elements of home page
 def get_all_home_elements():
-    return [weather_title, get_weather_row(),
-                         file_download_title, get_log_tables(), 
-                         seismic_data_title, all_seismic_row, 
-                         gps_data_title, get_gps_tables()]
-
-
+    return [get_weather_row(""), build_summaryspec_component(""), get_log_tables(""),]
 
 
 ### ALL CALLBACKS ###
@@ -368,7 +375,7 @@ def get_all_home_elements():
 #callback to update waveform, spectrogram, and PSD
 @app.callback(
         Output("storefigresamp", "data"),
-        Output("waveformgraph", "children"), 
+        Output("waveformgraph", "children", allow_duplicate=True), 
         Output("spectrogramgraph", "children"), 
         Output("psdgraph", "children"),
         Input("formsubmitbut", "n_clicks"),
@@ -377,7 +384,8 @@ def get_all_home_elements():
         State("timeframepicker", "start_date"),
         State("timeframepicker", "end_date"),
         State("dropdownwavefilt", "value"), 
-        memoize=True,
+        memoize=True, 
+
 )
 def update_seismic_page(submitted, fig, station, start_date, end_date, wavefilt):
     ctx = callback_context
@@ -394,6 +402,8 @@ def update_seismic_page(submitted, fig, station, start_date, end_date, wavefilt)
         print(time.time() - start, flush = True)
 
     return [Serverside(fig), waveform_graph, spectrogram, psd]
+
+
 
 # Weather Page Callbacks
 
@@ -426,16 +436,15 @@ def update_gps_content(start_date, end_date, station, n_clicks):
 
 # GPS Vis Page Callbacks
 
-# callback to update animation
+# callback to create GPS tracks
 @app.callback(
-        Output("gps_animation", "children"), 
-        State("gps_vis_dropdown", "value"), 
+        Output("gps_animation", "figure"), 
         State("gps_vis_datepicker", "start_date"), 
         State("gps_vis_datepicker", "end_date"), 
         Input("gpsvis_formsubmitbut", "n_clicks")
 )
-def update_gps_vis_content(station, start_date, end_date, n_clicks):
-    return calculations.get_gps_loc(start_date, end_date, station)
+def update_gps_vis_content(start_date, end_date, n_clicks):
+    return calculations.get_gps_tracks(start_date, end_date)
 
 # Callback to update distance/orientation graphs
 @app.callback(
@@ -443,6 +452,7 @@ def update_gps_vis_content(station, start_date, end_date, n_clicks):
         Output("baseline_orient", "children"), 
         Output("baseline_length_resid", "children"), 
         Output("baseline_orient_resid", "children"), 
+        Output("gps_animation2", "children"),
         State("gps_vis_dropdown2", "value"),
         State("gps_vis_datepicker2", "start_date"), 
         State("gps_vis_datepicker2", "end_date"), 
@@ -451,15 +461,46 @@ def update_gps_vis_content(station, start_date, end_date, n_clicks):
 def update_gps_vis_disori_content(refstation, start_date, end_date, n_clicks):
     return calculations.get_baseline_graphs(start_date, end_date, refstation)
 
+##callback to zoom in on point whenever it is clicked
+@app.callback(
+    Output('gps_animation', 'figure', allow_duplicate=True),
+    State('gps_animation', 'figure'),
+    Input('gps_animation', 'clickData'),
+    prevent_initial_call = True)
+def update_y_timeseries(currFigure, clickData):
+    lat_foc = clickData['points'][0]['lat']
+    lon_foc = clickData['points'][0]['lon']
+    currFigure['layout']['mapbox']['center'] = {'lat': lat_foc, 'lon': lon_foc}
+    currFigure['layout']['mapbox']['zoom'] = 40
+    return currFigure
+
+
 # Home Page Callbacks
 
 # Callback to update summary spectrogram
-@app.callback(
-        Output("summaryspec", "children"), 
-        Input("dropdownhomeseisspec", "value")
+@app.callback( 
+        Output("sumspec1", "children"),
+        Output("sumspec2", "children"), 
+        Output("sumspec3", "children"),
+        Output("sumspec-card1-titleid", "children"), 
+        Output("sumspec-card2-titleid", "children"),
+        Output("sumspec-card3-titleid", "children"),
+        Output("sumspec-card1-id", "style"), 
+        Output("sumspec-card2-id", "style"), 
+        Output("sumspec-card3-id", "style"), 
+        Input("specsumslider", "value")
 )
-def update_spec_home_page(station):
-    return calculations.create_spec_five_days(station)
+def update_summary_spectrogram(slider_val):
+    start = slider_val - 1
+    used_stations = stationsoptions[start * 3:start * 3 + 3]
+    titles = [f"""Station: {st}""" for st in used_stations]
+    while len(titles) < 3:
+        titles.append("")
+    graphs = create_spec_three_days(used_stations)
+    check1 = {'display':'none'} if not titles[0] else {}
+    check2 = {'display':'none'} if not titles[1] else {}
+    check3 = {'display':'none'} if not titles[2] else {}
+    return graphs[0], graphs[1], graphs[2], titles[0], titles[1], titles[2], check1, check2, check3
 
 # Callback to update summary PSD
 @app.callback(
@@ -470,20 +511,537 @@ def update_spec_home_page(station):
     return calculations.create_psd_five_days(station)
 
 
+## Callbacks to handle opening and closing of Description Modals
+@app.callback(
+        Output("waveformq-modal", "is_open"), 
+        Input("open-waveformq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("specq-modal", "is_open"), 
+        Input("open-specq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("psdq-modal", "is_open"), 
+        Input("open-psdq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gps-east-q-modal", "is_open"), 
+        Input("open-gps-east-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gps-north-q-modal", "is_open"), 
+        Input("open-gps-north-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gps-up-q-modal", "is_open"), 
+        Input("open-gps-up-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+## gpsvis
+@app.callback(
+        Output("gpsvis-ani-q-modal", "is_open"), 
+        Input("open-gpsvis-ani-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gpsvis-ani2-q-modal", "is_open"), 
+        Input("open-gpsvis-ani2-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gpsvis-base-q-modal", "is_open"), 
+        Input("open-gpsvis-base-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gpsvis-orient-q-modal", "is_open"), 
+        Input("open-gpsvis-orient-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gpsvis-lengthres-q-modal", "is_open"), 
+        Input("open-gpsvis-lengthres-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gpsvis-orientres-q-modal", "is_open"), 
+        Input("open-gpsvis-orientres-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+##weather
+@app.callback(
+        Output("weather-temp-q-modal", "is_open"), 
+        Input("open-weather-tempq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("weather-press-q-modal", "is_open"), 
+        Input("open-weather-pressq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("weather-hum-q-modal", "is_open"), 
+        Input("open-weather-humq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+## home page
+@app.callback(
+        Output("specsum-q-modal-id", "is_open"), 
+        Input("specsum-q-id", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("weather-q-modal-id", "is_open"), 
+        Input("weather-q-id", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("log-q-modal-id", "is_open"), 
+        Input("log-q-id", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+## Description Modals on Forms
+
+# Seismic
+
+@app.callback(
+        Output("seismicq-modal", "is_open"), 
+        Input("open-seismicq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+# GPS
+
+@app.callback(
+        Output("gpsq-modal", "is_open"), 
+        Input("open-gpsq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+#GPS Vis
+@app.callback(
+        Output("gpsvis1-q-modal", "is_open"), 
+        Input("open-gpsvis1q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gpsvis2-q-modal", "is_open"), 
+        Input("open-gpsvis2q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+
+#Weather
+
+@app.callback(
+        Output("weather-q-modal", "is_open"), 
+        Input("open-weatherq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+
+## Callbacks to handle opening and closing of Expand Modals
+def update_axis_ranges(graph):
+    print(graph, flush = True)
+    if graph and "figure" in graph["props"] and "layout" in graph["props"]["figure"] and "xaxis" in graph["props"]["figure"]["layout"] and "yaxis" in graph["props"]["figure"]["layout"]:
+        graph["props"]["figure"]["layout"]["xaxis"]["autorange"] = True
+        graph["props"]["figure"]["layout"]["yaxis"]["autorange"] = True
+
+def update_expand(ctx, open_button_id, close_button_id, modal_open, modal_graph, page_graph):
+    which_inp = ctx.triggered_id if not None else 'No clicks yet'
+    print(which_inp, flush = True)
+    if which_inp == open_button_id:
+        if modal_open: ## should never happen but just in case
+            update_axis_ranges(modal_graph)
+            return modal_graph, True, None
+        else:
+            update_axis_ranges(page_graph) 
+            return page_graph, True, None
+    elif which_inp == close_button_id:
+        if modal_open:
+            update_axis_ranges(modal_graph)
+            return None, False, modal_graph
+        else: ## should never happen but just in case
+            update_axis_ranges(page_graph)
+            return None, False, page_graph
+    else:
+        return no_update
+
+
+##Open/Close home page spectrogram modals
+@app.callback(
+    Output("sumspec-card1-modalbody-id", "children"), 
+    Output("sumspec-card1-modal-id", "is_open"),
+    Output("sumspec1", "children", allow_duplicate=True), 
+    State("sumspec1", "children"), 
+    State("sumspec-card1-modalbody-id", "children"), 
+    State("sumspec-card1-modal-id", "is_open"),
+    Input("sumspec-card1-expand-button-id", "n_clicks"), 
+    Input("sumspec-card1-close-button-id", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    print(page_graph, flush = True)
+    return update_expand(ctx, "sumspec-card1-expand-button-id", "sumspec-card1-close-button-id", modal_open, 
+                  modal_graph, page_graph)
+
+@app.callback(
+    Output("sumspec-card2-modalbody-id", "children"), 
+    Output("sumspec-card2-modal-id", "is_open"),
+    Output("sumspec2", "children", allow_duplicate=True), 
+    State("sumspec2", "children"), 
+    State("sumspec-card2-modalbody-id", "children"), 
+    State("sumspec-card2-modal-id", "is_open"),
+    Input("sumspec-card2-expand-button-id", "n_clicks"), 
+    Input("sumspec-card2-close-button-id", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    print(page_graph, flush = True)
+    return update_expand(ctx, "sumspec-card2-expand-button-id", "sumspec-card2-close-button-id", modal_open, 
+                  modal_graph, page_graph)
+
+@app.callback(
+    Output("sumspec-card3-modalbody-id", "children"), 
+    Output("sumspec-card3-modal-id", "is_open"),
+    Output("sumspec3", "children", allow_duplicate=True), 
+    State("sumspec3", "children"), 
+    State("sumspec-card3-modalbody-id", "children"), 
+    State("sumspec-card3-modal-id", "is_open"),
+    Input("sumspec-card3-expand-button-id", "n_clicks"), 
+    Input("sumspec-card3-close-button-id", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    print(page_graph, flush = True)
+    return update_expand(ctx, "sumspec-card3-expand-button-id", "sumspec-card3-close-button-id", modal_open, 
+                  modal_graph, page_graph)
+
+## Open/Close waveform graph modal
+@app.callback(
+    Output("open-waveform-modal-body", "children"), 
+    Output("open-waveform-modal", "is_open"),
+    Output("waveformgraph", "children", allow_duplicate=True), 
+    State("waveformgraph", "children"), 
+    State("open-waveform-modal-body", "children"), 
+    State("open-waveform-modal", "is_open"),
+    Input("open-waveform-button", "n_clicks"), 
+    Input("close-waveform-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    print(page_graph, flush = True)
+    return update_expand(ctx, "open-waveform-button", "close-waveform-button", modal_open, 
+                  modal_graph, page_graph)
+
+## Open/Close spectrogram graph modal
+@app.callback(
+    Output("open-spec-modal-body", "children"), 
+    Output("open-spec-modal", "is_open"),
+    Output("spectrogramgraph", "children", allow_duplicate=True), 
+    State("spectrogramgraph", "children"), 
+    State("open-spec-modal-body", "children"), 
+    State("open-spec-modal", "is_open"),
+    Input("open-spec-button", "n_clicks"), 
+    Input("close-spec-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-spec-button", "close-spec-button", modal_open, 
+                  modal_graph, page_graph)
+
+## Open/Close PSD graph modal
+@app.callback(
+    Output("open-psd-modal-body", "children"), 
+    Output("open-psd-modal", "is_open"),
+    Output("psdgraph", "children", allow_duplicate=True), 
+    State("psdgraph", "children"), 
+    State("open-psd-modal-body", "children"), 
+    State("open-psd-modal", "is_open"),
+    Input("open-psd-button", "n_clicks"), 
+    Input("close-psd-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-psd-button", "close-psd-button", modal_open, 
+                  modal_graph, page_graph)
+        
+## Open/close GPS-page east graph
+@app.callback(
+    Output("gps-east-modal-body", "children"), 
+    Output("gps-east-modal", "is_open"),
+    Output("gps_east_graph", "children", allow_duplicate=True), 
+    State("gps_east_graph", "children"), 
+    State("gps-east-modal-body", "children"), 
+    State("gps-east-modal", "is_open"),
+    Input("open-gps-east-modal", "n_clicks"), 
+    Input("close-gps-east-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gps-east-modal", "close-gps-east-modal", modal_open,
+                         modal_graph, page_graph)
+
+## Open/close GPS-page north graph
+@app.callback(
+    Output("gps-north-modal-body", "children"), 
+    Output("gps-north-modal", "is_open"),
+    Output("gps_north_graph", "children", allow_duplicate=True), 
+    State("gps_north_graph", "children"), 
+    State("gps-north-modal-body", "children"), 
+    State("gps-north-modal", "is_open"),
+    Input("open-gps-north-modal", "n_clicks"), 
+    Input("close-gps-north-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gps-north-modal", "close-gps-north-modal", modal_open,
+                         modal_graph, page_graph)
+
+## Open/close GPS-page up graph
+@app.callback(
+    Output("gps-up-modal-body", "children"), 
+    Output("gps-up-modal", "is_open"),
+    Output("gps_up_graph", "children", allow_duplicate=True), 
+    State("gps_up_graph", "children"), 
+    State("gps-up-modal-body", "children"), 
+    State("gps-up-modal", "is_open"),
+    Input("open-gps-up-modal", "n_clicks"), 
+    Input("close-gps-up-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gps-up-modal", "close-gps-up-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close Weather-temp graph
+@app.callback(
+    Output("weather-temp-modal-body", "children"), 
+    Output("weather-temp-modal", "is_open"),
+    Output("weather_temp_graph", "children", allow_duplicate=True), 
+    State("weather_temp_graph", "children"), 
+    State("weather-temp-modal-body", "children"), 
+    State("weather-temp-modal", "is_open"),
+    Input("open-weather-temp-modal", "n_clicks"), 
+    Input("close-weather-temp-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-weather-temp-modal", "close-weather-temp-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close Weather-pressure graph
+@app.callback(
+    Output("weather-press-modal-body", "children"), 
+    Output("weather-press-modal", "is_open"),
+    Output("weather_pressure_graph", "children", allow_duplicate=True), 
+    State("weather_pressure_graph", "children"), 
+    State("weather-press-modal-body", "children"), 
+    State("weather-press-modal", "is_open"),
+    Input("open-weather-press-modal", "n_clicks"), 
+    Input("close-weather-press-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-weather-press-modal", "close-weather-press-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close Weather-rel. humidity graph
+@app.callback(
+    Output("weather-hum-modal-body", "children"), 
+    Output("weather-hum-modal", "is_open"),
+    Output("weather_humidity_graph", "children", allow_duplicate=True), 
+    State("weather_humidity_graph", "children"), 
+    State("weather-hum-modal-body", "children"), 
+    State("weather-hum-modal", "is_open"),
+    Input("open-weather-hum-modal", "n_clicks"), 
+    Input("close-weather-hum-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-weather-hum-modal", "close-weather-hum-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close GPS visualization animation graph
+@app.callback(
+    Output("gpsvis-ani-modal-body", "children"), 
+    Output("gpsvis-ani-modal", "is_open"),
+    Output("gps_animation_div", "children", allow_duplicate=True), 
+    State("gps_animation_div", "children"), 
+    State("gpsvis-ani-modal-body", "children"), 
+    State("gpsvis-ani-modal", "is_open"),
+    Input("open-gpsvis-ani-modal", "n_clicks"), 
+    Input("close-gpsvis-ani-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gpsvis-ani-modal", "close-gpsvis-ani-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close GPS visualization animation #2 graph
+@app.callback(
+    Output("gpsvis-ani2-modal-body", "children"), 
+    Output("gpsvis-ani2-modal", "is_open"),
+    Output("gps_animation2", "children", allow_duplicate=True), 
+    State("gps_animation2", "children"), 
+    State("gpsvis-ani2-modal-body", "children"), 
+    State("gpsvis-ani2-modal", "is_open"),
+    Input("open-gpsvis-ani2-modal", "n_clicks"), 
+    Input("close-gpsvis-ani2-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gpsvis-ani2-modal", "close-gpsvis-ani2-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close GPS visualization baseline length graph
+@app.callback(
+    Output("gpsvis-base-modal-body", "children"), 
+    Output("gpsvis-base-modal", "is_open"),
+    Output("baseline_length", "children", allow_duplicate=True), 
+    State("baseline_length", "children"), 
+    State("gpsvis-base-modal-body", "children"), 
+    State("gpsvis-base-modal", "is_open"),
+    Input("open-gpsvis-base-modal", "n_clicks"), 
+    Input("close-gpsvis-base-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gpsvis-base-modal", "close-gpsvis-base-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close GPS visualization baseline orientation graph
+@app.callback(
+    Output("gpsvis-orient-modal-body", "children"), 
+    Output("gpsvis-orient-modal", "is_open"),
+    Output("baseline_orient", "children", allow_duplicate=True), 
+    State("baseline_orient", "children"), 
+    State("gpsvis-orient-modal-body", "children"), 
+    State("gpsvis-orient-modal", "is_open"),
+    Input("open-gpsvis-orient-modal", "n_clicks"), 
+    Input("close-gpsvis-orient-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gpsvis-orient-modal", "close-gpsvis-orient-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close GPS visualization baseline length residual graph
+@app.callback(
+    Output("gpsvis-lengthres-modal-body", "children"), 
+    Output("gpsvis-lengthres-modal", "is_open"),
+    Output("baseline_length_resid", "children", allow_duplicate=True), 
+    State("baseline_length_resid", "children"), 
+    State("gpsvis-lengthres-modal-body", "children"), 
+    State("gpsvis-lengthres-modal", "is_open"),
+    Input("open-gpsvis-lengthres-modal", "n_clicks"), 
+    Input("close-gpsvis-lengthres-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gpsvis-lengthres-modal", "close-gpsvis-lengthres-modal", modal_open,
+                         modal_graph, page_graph)
+
+##Open/close GPS visualization baseline orientation residual graph
+@app.callback(
+    Output("gpsvis-orientres-modal-body", "children"), 
+    Output("gpsvis-orientres-modal", "is_open"),
+    Output("baseline_orient_resid", "children", allow_duplicate=True), 
+    State("baseline_orient_resid", "children"), 
+    State("gpsvis-orientres-modal-body", "children"), 
+    State("gpsvis-orientres-modal", "is_open"),
+    Input("open-gpsvis-orientres-modal", "n_clicks"), 
+    Input("close-gpsvis-orientres-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gpsvis-orientres-modal", "close-gpsvis-orientres-modal", modal_open,
+                         modal_graph, page_graph)
+        
 ## callback to detrmine page content
 @app.callback(Output("page-content", "children"), [Input("url", "pathname")])
 def render_page_content(pathname):
     if pathname == "/":
         all_home_elements = get_all_home_elements()
-        return html.Div(all_home_elements)
+        return dbc.Container(all_home_elements, fluid=True)
     elif pathname == "/seismic":
-        return html.Div(seismic.ALL_SEISMIC_ELEMENTS)
+        return dbc.Container(seismic.get_all_seismic_elements(), fluid=True)
     elif pathname == "/weather":
-        return html.Div(weather.get_all_weather_elements())
+        return dbc.Container(weather.get_all_weather_elements(), fluid=True)
     elif pathname == "/gps":
-        return html.Div(gps.get_all_gps_elements())
+        return dbc.Container(gps.get_all_gps_elements(), fluid=True)
     elif pathname =="/gpsdeform":
-        return html.Div(gpsvis.get_all_gpsvis_elements())
+        return dbc.Container(gpsvis.get_all_gpsvis_elements(), fluid=True)
     elif pathname == "/sysmon":
         return html.P("Oh cool, this is the system monitoring page!")
     # If the user tries to reach a different page, return a 404 message

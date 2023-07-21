@@ -96,32 +96,48 @@ def create_waveform_graph(net, sta, chan, starttime, endtime, extract, fig):
             return dbc.Label("No data was found."), None, None
     else:
         return dbc.Label("No data was found."), None, None  
-    
+     
     ret = st.copy()
     filtered_data = st.remove_response(output = extract, inventory = inventory) ## filter stream based on filter option selected
     waveformdata = filtered_data[0].data
-    waveformtimes = filtered_data[0].times(type="relative")
-   
+    waveformtimes = [str(x) for x in filtered_data[0].times(type="utcdatetime")]
+
     df = pd.DataFrame({
-        'Time (in days)': waveformtimes,
+        'Date': waveformtimes,
         'Amplitude': waveformdata,
     })
 
     fig.add_trace(
         go.Scattergl(
-            x = df['Time (in days)'],
+            x = df['Date'],
             y = df['Amplitude'],
             )
     )
     
     fig.update_layout(
-    title="Waveform Data",
-    xaxis_title="Time (s)",
-    yaxis_title=" ",
+    xaxis_title="Date",
+    )
+
+    if extract == "DISP":
+        fig.update_layout(
+        yaxis_title="Displacement (m)",
+        )
+    elif extract == "VEL":
+        fig.update_layout(
+        yaxis_title="Velocity (m/s)",
+        )
+    elif extract == "ACC":
+        fig.update_layout(
+        yaxis_title="Acceleration (m/s^2)",
+        )
+
+    fig.update_layout(
+    xaxis_title='Date',
+    yaxis_title='Frequency (Hz)',
     )
     
     fig.update_layout(template='plotly_dark')
-    return  [dcc.Graph(figure = fig, id = "waveformgraphgr"), ret, inventory]
+    return  [dcc.Graph(figure = fig, id = "waveformgraphgr", style={"height": "100%"}), ret, inventory]
 
 
 ## method to create PSD given Obspy Stream object and Inventory object corresponding to the stream
@@ -145,11 +161,10 @@ def create_psd(currWaveForm, currInventory):
     fig.update_layout(template='plotly_dark')
 
     fig.update_layout(
-    title="Power Spectral Density",
     xaxis_title='Frequency (Hz)',
     yaxis_title='Amplitude (dB)',
     )
-    return dcc.Graph(figure = fig)
+    return dcc.Graph(figure = fig, style={"height": "100%"})
 
 
 ## method to create spectrogram given Obspy Stream object
@@ -163,7 +178,10 @@ def create_spectrogram(currWaveForm):
     data = data - data.mean()
     spectrum, freqs, t = mlab.specgram(data, Fs = samp_rate, NFFT=512)
     spectrum = np.sqrt(spectrum[1:, :])
-    freqs = freqs[1:]
+    freqs = freqs[1:]  
+
+    ## start time of stream
+    start_time =  currWaveForm[0].stats.starttime
     
     ## downsamples the data to 800 pixels so Plotly can display
     pw_s = xr.DataArray(spectrum, coords=[('Frequency (Hz)', freqs), ('Time (s)', t)])
@@ -172,16 +190,22 @@ def create_spectrogram(currWaveForm):
                 y_range=(freqs[0], freqs[-1]))
     
     agg = cvs.raster(pw_s, agg=rd.mean())
+    dates_arr = np.array([str(start_time + x) for x in agg["Time (s)"].data]*len(agg["Frequency (Hz)"])).reshape(len(agg["Frequency (Hz)"]),  len(agg["Time (s)"]))
+
     fig = px.imshow(agg, 
-                    origin="lower", )
-    
+                    origin="lower",)
+
+    fig.update(data=[{'customdata': dates_arr,
+    'hovertemplate': "Date: %{customdata} <br>Frequency: %{y} <br>Color: %{z}<br><extra></extra>"}])
     fig.update_layout(
-    title="Spectrogram",
     xaxis_title='Time (s)',
     yaxis_title='Frequency (Hz)',
     )
+    fig.update_layout(
+    margin=dict(l=5,r=5,b=5,t=20),
+    )
     fig.update_layout(template='plotly_dark')
-    retGraph = dcc.Graph(figure = fig)
+    retGraph = dcc.Graph(figure = fig, style={"height": "100%"})
     return retGraph
 
 
@@ -229,8 +253,7 @@ def create_weather_graphs(starttime, endtime):
     )
 
     temp_fig.update_layout(
-    title="Temperature",
-    xaxis_title="Time",
+    xaxis_title="Date",
     yaxis_title="Temperature (C)",
     )
 
@@ -243,9 +266,8 @@ def create_weather_graphs(starttime, endtime):
     )
 
     press_fig.update_layout(
-    title="Pressure",
     xaxis_title="Time",
-    yaxis_title="Press",
+    yaxis_title="Pressure (hPa)",
     )
 
 
@@ -258,9 +280,8 @@ def create_weather_graphs(starttime, endtime):
     )
 
     relhum_fig.update_layout(
-    title="Relative Humidity",
     xaxis_title="Time",
-    yaxis_title="Rel. Hum.",
+    yaxis_title="Relative Humidity (%)",
     )
 
 
@@ -268,7 +289,7 @@ def create_weather_graphs(starttime, endtime):
     press_fig.update_layout(template='plotly_dark')
     relhum_fig.update_layout(template='plotly_dark')
     conn.close()
-    return dcc.Graph(figure = temp_fig), dcc.Graph(figure = press_fig), dcc.Graph(figure = relhum_fig)
+    return dcc.Graph(figure = temp_fig, style={"height": "100%"}), dcc.Graph(figure = press_fig, style={"height": "100%"}), dcc.Graph(figure = relhum_fig, style={"height": "100%"})
 
 ### GPS PAGE CALCULATION METHODS ###
 
@@ -308,7 +329,6 @@ def create_gps_graphs(starttime, endtime, station):
     )
 
     east_fig.update_layout(
-    title="East Movement",
     xaxis_title="Date",
     yaxis_title="East (m)",
     )
@@ -323,7 +343,6 @@ def create_gps_graphs(starttime, endtime, station):
     )
 
     north_fig.update_layout(
-    title="North Movement",
     xaxis_title="Date",
     yaxis_title="North (m)",
     )
@@ -337,7 +356,6 @@ def create_gps_graphs(starttime, endtime, station):
     )
 
     up_fig.update_layout(
-    title="Up Movement",
     xaxis_title="Date",
     yaxis_title="Up (m)",
     )
@@ -347,23 +365,9 @@ def create_gps_graphs(starttime, endtime, station):
     up_fig.update_layout(template='plotly_dark')
 
     conn.close()
-    return dcc.Graph(figure = east_fig), dcc.Graph(figure = north_fig), dcc.Graph(figure = up_fig)
+    return dcc.Graph(figure = east_fig, style={"height": "100%"}), dcc.Graph(figure = north_fig, style={"height": "100%"}), dcc.Graph(figure = up_fig, style={"height": "100%"})
 
 ### HOME PAGE CALCULATION METHODS ###
-
-## creates spectogram of seismic data from last 5 days
-def create_spec_five_days(station):
-    starttime = str(date.today() - timedelta(days=365))[:10]
-    endtime = str(date.today() - timedelta(days=360))[:10]
-    #starttime = str(date.today() - timedelta(days=5))[:10]
-    #endtime = str(date.today())[:10]
-    all_results = check_database(station, starttime, endtime)
-    if not all_results:
-        return dbc.Label("No data was found")
-    stream = create_stream(all_results)
-    if not stream:
-        return dbc.Label("No data was found")
-    return create_spectrogram(stream)
 
 # creates PSD of seismic data from last 5 days
 def create_psd_five_days(station):
@@ -387,50 +391,49 @@ def read_file(file_name, type = "NA"):
         if not lines:
             return "No files have been downloaded"
     log = pd.read_csv(file_name, delim_whitespace=True)
-    last_10 = log.tail(10)
-    return dbc.Table.from_dataframe(last_10, striped=True, bordered=True,  hover=True,
-    responsive=True,)
+    last = log.tail(200)
+    return html.Div(dbc.Table.from_dataframe(last, striped=True, bordered=True,  hover=True,
+    responsive=True,), style={"maxHeight": "500px", "overflow": "scroll"},)
 
 ### GPS Visualizations Page Calculation Methods ###
-
-def get_gps_loc(start_date, end_date, station):
-    ## let us evaluate in a period of months 
-    objstart_date = datetime.strptime(start_date, "%Y-%m-%d")
-    objend_date = datetime.strptime(end_date, "%Y-%m-%d")
-    timedif = int((objend_date - objstart_date).days / 50) + 1
-    all_dates = [str(objstart_date)]
-    while objstart_date < objend_date:
-        objstart_date += timedelta(days = timedif)
-        all_dates.append(str(objstart_date))
+def get_gps_tracks(start_date, end_date):
     conn = sqlite3.connect("database/sqlitedata.db")
     cur = conn.cursor()
-    query = f"""SELECT timestamp, station, eastingsf, northingsf, verticalf
-    FROM gps_data WHERE timestamp IN {str(tuple(all_dates))} AND station = ?; """
-    query_inputs  = (station, )
+
+    query = f"""SELECT timestamp, station, currlatitude, 
+    currlongitude, currheight FROM gps_data WHERE timestamp >= ? AND timestamp <= ?; """
+    query_inputs = (start_date, end_date)
+
     cur.execute(query, query_inputs)
     all_results = cur.fetchall()
-    if not all_results:
-        ## check if there's any data at all
-        query = f"""SELECT timestamp, station, eastingsf, northingsf, verticalf
-        FROM gps_data WHERE timestamp >= ? AND timestamp <= ? AND station = ?; """
-        query_inputs  = (start_date, end_date, station, )
-        cur.execute(query, query_inputs)
-        all_results = cur.fetchall()
-        if not all_results:
-                return dbc.Label("No data was found.")
-        elif len(all_results) > 500:
-            dbc.Label("Too much data to display. Please select a smaller time frame.")
-    df = pd.DataFrame(all_results, columns=['Date', 'Station', 'East', 'North', 'Vertical'])
-    df['East'] *= 100 ## so units will be in mm    
-    fig = px.scatter(df, x="East", y="North", animation_frame="Date", animation_group="Station",
-    range_x=[min(df["East"]),max(df["East"])], range_y=[min(df["North"]),max(df["North"])], hover_name="Date", hover_data=["Vertical"],
+    df = pd.DataFrame(all_results, columns=['Timestamp', 'Station', 'Latitude', 'Longitude', 'Height'])
+
+    fig = px.scatter_mapbox(df, lat="Latitude", lon="Longitude", hover_name="Station", hover_data=["Timestamp", "Height"], color = "Station",
+                        zoom = 4)
+    fig.update_layout(
+        mapbox_style="white-bg",
+        mapbox_layers=[
+            {
+                "below": 'traces',
+                "sourcetype": "raster",
+                "sourceattribution": "United States Geological Survey",
+                "source": [
+                    "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"
+                ]
+            }
+        ])
+    fig.update_layout(
+        margin=dict(l=0,r=0,b=0,t=0),
     )
     fig.update_traces(marker=dict(
-            size = 20
-        ),)
-    fig.update_layout(template='plotly_dark')
+        size = 20
+    ),)
     conn.close()
-    return dcc.Graph(figure = fig)
+    fig.update_layout(template='plotly_dark')
+    
+    return fig
+
+
 
 def get_baseline_graphs(start_date, end_date, ref_station):
     gps_stations = ast.literal_eval(os.environ["GPS_STATIONS"])
@@ -468,6 +471,8 @@ def get_baseline_graphs(start_date, end_date, ref_station):
     df_distance_resid = {'Time': [], 'Distance': [], 'Station': []}
     df_orient_resid = {'Time': [], 'Angle (in degrees)': [], 'Station': []}
 
+    ##stores east/north distance
+    df_east_north = {'Time': [], 'East (m)': [], 'North (m)': [], 'Station': []}
 
     for other_stats in other_station_locs:
         ll = other_station_locs[other_stats]
@@ -476,6 +481,15 @@ def get_baseline_graphs(start_date, end_date, ref_station):
         subang = -1
         for row in ll:
             if row[0] in ref_station_dict:
+                ## east/north distance (need to calculate 2 distances)
+                eastdist = Geodesic.WGS84.Inverse(row[2], row[3], row[2], ref_station_dict[row[0]][2])["s12"]
+                northdist = Geodesic.WGS84.Inverse(row[2], row[3], ref_station_dict[row[0]][1], row[3])["s12"]
+
+                df_east_north["Time"].append(row[0])
+                df_east_north["East (m)"].append(eastdist if row[3] > ref_station_dict[row[0]][2] else -eastdist)
+                df_east_north["North (m)"].append(northdist if row[2] > ref_station_dict[row[0]][1] else -northdist)
+                df_east_north["Station"].append(other_stats)
+
                 resultDict = Geodesic.WGS84.Inverse(row[2], row[3], ref_station_dict[row[0]][1], ref_station_dict[row[0]][2])
                 df_distance["Time"].append(row[0])
                 df_distance["Distance"].append(resultDict["s12"])
@@ -505,7 +519,7 @@ def get_baseline_graphs(start_date, end_date, ref_station):
     df_orient = pd.DataFrame(df_orient)
 
     if df_distance.empty:
-        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
 
     fig_distance = px.line(df_distance, x="Time", y="Distance", color="Station")
     fig_orient = px.line(df_orient, x="Time", y="Angle (in degrees)", color="Station")
@@ -517,11 +531,36 @@ def get_baseline_graphs(start_date, end_date, ref_station):
     fig_distance_residual = px.line(df_distance_residual, x="Time", y="Distance", color="Station")
     fig_orient_residual = px.line(df_orient_residual, x="Time", y="Angle (in degrees)", color="Station")
 
-   
+    df_east_north = pd.DataFrame(df_east_north)
 
+    fig_east_north = px.scatter(df_east_north, x="East (m)", y="North (m)", hover_name="Station", hover_data=["Time"], color = "Station",)
+    fig_east_north.update_traces(marker=dict(
+        size = 20
+    ),)
     fig_distance.update_layout(template='plotly_dark')
     fig_orient.update_layout(template='plotly_dark')
     fig_distance_residual.update_layout(template='plotly_dark')
     fig_orient_residual.update_layout(template='plotly_dark')
+    fig_east_north.update_layout(template='plotly_dark')
+
+    fig_distance.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Distance (m)",
+    )
+
+    fig_orient.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Angle (degrees)",
+    )
+
+    fig_distance_residual.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Distance (m)",
+    )
+
+    fig_orient_residual.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Distance (m)",
+    )
      
-    return dcc.Graph(figure = fig_distance), dcc.Graph(figure = fig_orient), dcc.Graph(figure = fig_distance_residual), dcc.Graph(figure = fig_orient_residual)
+    return dcc.Graph(figure = fig_distance, style={"height": "100%"}), dcc.Graph(figure = fig_orient, style={"height": "100%"}), dcc.Graph(figure = fig_distance_residual, style={"height": "100%"}), dcc.Graph(figure = fig_orient_residual, style={"height": "100%"}), dcc.Graph(figure = fig_east_north, style={"height": "100%"})
