@@ -1,50 +1,27 @@
 import dash
 import dash_bootstrap_components as dbc
 from dash import Input, Output, dcc, html, State
-import elementstyling
+import elementstyling, componentbuilder
 from datetime import date, timedelta 
 import ast, os
+import componentbuilder
+from dotenv import load_dotenv
 
-def get_date_picker():
-    #Time frame picker
-    gps_stations = ast.literal_eval(os.environ["GPS_STATIONS"])
-    #Dropdown to choose gps station
-    if gps_stations:
-        dropdown_gps_station = html.Div(
-            [
-                dbc.Label("Select GPS station:"),
-                dcc.Dropdown(
-                    gps_stations,
-                    gps_stations[0],
-                    id="gps_dropdown",
-                    clearable=False,
-                ),
-            ],
-        )
-    else:
-        dropdown_gps_station = html.Div()
 
-    datePicker = html.Div(
-        [   dbc.Row([dbc.Label("Select date range:")]),    
-            dcc.DatePickerRange(
-            id='gps_datepicker',
-            min_date_allowed=date(1900, 1, 1),
-            max_date_allowed=date.today(),
-            initial_visible_month=date(2022, 12, 1),
-            start_date=date.today() - timedelta(10),
-            end_date=date.today()
-        )
-        ],
-    )
-    gps_date_pick = dbc.Form([dropdown_gps_station, html.Br(), datePicker, html.Br(), dbc.Button("Submit", color="primary",
-                                            className="mb-3", id = "gps_formsubmitbut")])
-    
-    return dbc.Card([gps_date_pick],  body=True, style=elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)
+load_dotenv()
+gps_stations = ast.literal_eval(os.environ["GPS_STATIONS"])
 
 def get_all_gps_elements():
-    gps_form = get_date_picker()
-    gps_east_graph = dbc.Card(dbc.Spinner([html.Div(id="gps_east_graph")], color="primary"),  body=True, style=elementstyling.CARD_HALF_WIDTH_RIGHT_DOWNUP)
-    gps_row_one = dbc.Row([dbc.Col([gps_form], width = 3), dbc.Col([gps_east_graph])])
-    gps_north_graph = dbc.Card(dbc.Spinner([html.Div(id="gps_north_graph")], color="primary"),  body=True, style=elementstyling.MARGIN_STYLE)
-    gps_up_graph = dbc.Card(dbc.Spinner([html.Div(id="gps_up_graph")], color="primary"),  body=True, style=elementstyling.MARGIN_STYLE)
-    return [gps_row_one, gps_north_graph, gps_up_graph]
+    gps_form = componentbuilder.build_form_component("GPS Data Visualization Form", [("Select GPS station:", gps_stations, "gps_dropdown"),], 
+                                                     [("Select date range:", "gps_datepicker")], "gps_formsubmitbut", "open-gpsq-button", "gpsq-modal", "", elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)
+    gps_east_graph = componentbuilder.build_graph_component("East Movement", "open-gps-east-modal", 
+                                                            "close-gps-east-modal", "open-gps-east-q-button", "gps-east-modal-body", "gps-east-modal", "gps_east_graph", "gps-east-q-modal", "", elementstyling.CARD_HALF_WIDTH_RIGHT_DOWNUP)
+    gps_row_one = dbc.Row([dbc.Col([gps_form], width = 4), dbc.Col([gps_east_graph], width = 8)])
+    gps_north_graph = componentbuilder.build_graph_component("North Movement", "open-gps-north-modal", 
+                                                             "close-gps-north-modal", "open-gps-north-q-button", "gps-north-modal-body", "gps-north-modal", 
+                                                             "gps_north_graph",  "gps-north-q-modal", "", elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)
+    gps_up_graph = componentbuilder.build_graph_component("Up Movement", "open-gps-up-modal", 
+                                                             "close-gps-up-modal", "open-gps-up-q-button", "gps-up-modal-body", "gps-up-modal", 
+                                                             "gps_up_graph", "gps-up-q-modal", "", elementstyling.CARD_HALF_WIDTH_RIGHT_DOWNUP)
+    gps_row_two = dbc.Row([dbc.Col([gps_north_graph], width = 6), dbc.Col([gps_up_graph], width = 6)])
+    return [gps_row_one, gps_row_two]

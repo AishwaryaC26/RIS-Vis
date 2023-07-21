@@ -8,8 +8,8 @@ RUN pip3 install -r requirements.txt
 
 COPY . .
 
-EXPOSE 8050
+EXPOSE 8080
 
 #CMD ["python3", "-u", "app.py"]
-CMD ["gunicorn", "-w 4", "app:server", "-b :8050"]
+CMD ["gunicorn", "-w 4", "app:server", "-b :8080"]
  
