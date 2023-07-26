@@ -68,10 +68,7 @@ def download_weather_data(conn):
                         INSERT INTO {db_name} (timestamp, temperature, 
                         pressure, relhumidity)
                         VALUES(?, ?, ?, ?);"""
-                        #print("hi")
                         data_tuple = (str(start), arr[5], arr[6], arr[9])
-                     #   cur = conn.cursor()
-                     #   cur.execute(query, data_tuple)
                         start += datetime.timedelta(hours = 3)
             os.remove("database/weatherdata.csv")
         
