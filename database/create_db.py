@@ -39,7 +39,7 @@ conn = create_connection("database/sqlitedata.db")
 
 if __name__ == '__main__':
     load_dotenv()
-    stations = list(ast.literal_eval(os.environ["SEISMIC_STATIONS"]).keys())
+    #stations = list(ast.literal_eval(os.environ["SEISMIC_STATIONS"]).keys())
 
     create_table(conn, """ CREATE TABLE IF NOT EXISTS seismic_data (
     timestamp TEXT,
@@ -68,6 +68,31 @@ if __name__ == '__main__':
     currlatitude REAL, 
     currlongitude REAL, 
     currheight REAL, 
+    PRIMARY KEY (timestamp, station)
+    ); """)
+
+    create_table(conn, """CREATE TABLE IF NOT EXISTS sysmon_data (
+    timestamp TEXT,
+    station TEXT,
+    voltageToBattery REAL, 
+    currentToBattery REAL, 
+    voltageFrBattery REAL, 
+    currentFrBattery REAL, 
+    tempInside REAL, 
+    pressInside REAL, 
+    humidInside REAL, 
+    tempOutside REAL, 
+    pressOutside REAL, 
+    humidOutside REAL, 
+    gyroX REAL, 
+    gyroY REAL, 
+    gyroZ REAL, 
+    accelX REAL, 
+    accelY REAL, 
+    accelZ REAL, 
+    cpu REAL, 
+    memory REAL,
+    diskspace REAL,              
     PRIMARY KEY (timestamp, station)
     ); """)
 

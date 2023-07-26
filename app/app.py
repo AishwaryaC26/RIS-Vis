@@ -1,7 +1,7 @@
 #Plotly Dash related imports
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, dcc, html, State, no_update, callback_context, CeleryManager, ctx
+from dash import Input, Output, dcc, html, State, no_update, callback_context, ctx
 from trace_updater import TraceUpdater
 import plotly.graph_objects as go
 from plotly_resampler import FigureResampler
@@ -19,7 +19,7 @@ import redis
 from celery import Celery
 
 #component imports from other files
-import seismic, weather, gps, elementstyling, gpsvis
+import seismic, weather, gps, elementstyling, gpsvis, monvct, monph, monga, monu
 import calculations, componentbuilder
 
 #Obspy (seismic data processing library) imports 
@@ -50,7 +50,8 @@ load_dotenv() ## loads variables from environment file
 redis_host = os.environ['CACHE_REDIS_HOST']
 server = flask.Flask(__name__)
 app = DashProxy(__name__, server = server, transforms=[ServersideOutputTransform(backends=[RedisBackend(host = redis_host)])], external_stylesheets=[dbc.themes.DARKLY, dbc.icons.FONT_AWESOME], suppress_callback_exceptions=True)
-
+app.title = 'SGIP Data Monitor and Visualizer'
+app.favicon = "assets/favicon.ico"
 
 ## creates redis cache with configuration described in .env file
 cache = Cache(server, config={
@@ -88,7 +89,18 @@ main_navbar = dbc.NavbarSimple(
             label="Geodesy",
         ),
         dbc.NavItem(dbc.NavLink("Weather", href="/weather")),
-        dbc.NavItem(dbc.NavLink("System Monitoring", href="/sysmon"))
+        dbc.DropdownMenu(
+            children=[
+                dbc.DropdownMenuItem("Subheadings", header=True),
+                dbc.DropdownMenuItem("Voltage, Current, & Temperature", href="/monvct"),
+                dbc.DropdownMenuItem("Pressure & Humidity", href="/monph"),
+                dbc.DropdownMenuItem("Gyroscope & Accelerometer", href="/monga"),
+                dbc.DropdownMenuItem("Utility", href="/monu"),
+            ],
+            nav=True,
+            in_navbar=True,
+            label="System Monitoring",
+        ),
     ],
     brand="MIT Haystack SGIP Data Monitor and Visualizer",
     color="primary",
@@ -113,8 +125,8 @@ def get_weather_data():
     output = {}
 
     location = ast.literal_eval(os.environ["WEATHER_COORDS"]) ## gets location of where to find weather
-    ross_ice_shelf_latitude = location[0]
-    ross_ice_shelf_longitude = location[1]
+    ross_ice_shelf_latitude = location[0][1]
+    ross_ice_shelf_longitude = location[0][2]
 
     weather_ris = mgr.weather_at_coords(ross_ice_shelf_latitude, ross_ice_shelf_longitude).weather 
 
@@ -153,8 +165,8 @@ def get_future_weather_data():
     output = {}
 
     location = ast.literal_eval(os.environ["WEATHER_COORDS"])
-    ross_ice_shelf_latitude = location[0]
-    ross_ice_shelf_longitude = location[1]
+    ross_ice_shelf_latitude = location[0][1]
+    ross_ice_shelf_longitude = location[0][2]
 
     ## fetches future forecast
     weather_ris = mgr.forecast_at_coords(ross_ice_shelf_latitude, ross_ice_shelf_longitude, '3h')
@@ -200,7 +212,6 @@ def get_future_weather_data():
 
 @cache.memoize(timeout=21600)
 def create_spec_three_days(stations):
-    print("getting called hehe no", flush = True)
     figs = []
     for station in stations:
         starttime = str(date.today() - timedelta(days=365))[:10]
@@ -229,7 +240,7 @@ def create_spec_three_days(stations):
 def get_current_weather():
     ## creates current weather component
     allweatherdict = get_weather_data()
-    current_weather = html.Div([html.H2(weather_loc_name), f"""Latitude: {weather_coords[0]}, Longitude: {weather_coords[1]} """, html.Hr(), 
+    current_weather = html.Div([html.H2(weather_loc_name), f"""Latitude: {weather_coords[0][1]}, Longitude: {weather_coords[0][2]} """, html.Hr(), 
                                          f"""Current Temperature: {allweatherdict["current temp"]} C""", html.Br(),
                                          f"""Feels like: {allweatherdict["feels like"]} C""", html.Br(),
                                       f"""Wind Speed: {allweatherdict["wind speed"]} m/s""", html.Br(), f"""Pressure: {allweatherdict["pressure"]} hPa"""], style={"text-align": "center"})
@@ -251,8 +262,8 @@ def get_weather_predictions():
                                           dbc.Col(weather_threeday, style={"text-align": "center"}),dbc.Col(weather_fourday, style={"text-align": "center"}),
                                           ])
 def get_map_component():
-    location= [weather_coords]
-    df = pd.DataFrame(location, columns=['Latitude', 'Longitude'])
+    location= weather_coords
+    df = pd.DataFrame(location, columns=['Station', 'Latitude', 'Longitude'])
 
     fig = px.scatter_mapbox(df, lat="Latitude", lon="Longitude", zoom=1, height=245)
     fig.update_layout(
@@ -283,7 +294,7 @@ def get_weather_row(card_desc):
             dbc.Modal(
                 [
                 dbc.ModalHeader([html.H4("Description", className="card-title")]),
-                card_desc
+                dbc.ModalBody(card_desc)
                 ],
                 id="weather-q-modal-id",
                 is_open=False,
@@ -295,8 +306,10 @@ def get_weather_row(card_desc):
         html.Br(), ], style=None)
     return weather_component
    
+weather_desc = "The weather data/predictions being used in the SGIP Dashboard are from the OpenWeatherMap API. Data is updated hourly."
 # File Download Section
 
+log_desc = "Log tables show the last 200 files that have been downloaded with respect to seismic data, GPS data, and weather data."
 def get_log_tables(card_desc):
 
     seismic_log_table = calculations.read_file("logs/seismic_log.txt")
@@ -315,7 +328,7 @@ def get_log_tables(card_desc):
             dbc.Modal(
                 [
                 dbc.ModalHeader([html.H4("Description", className="card-title")]),
-                card_desc
+                dbc.ModalBody(card_desc)
                 ],
                 id="log-q-modal-id",
                 is_open=False,
@@ -329,6 +342,7 @@ def get_log_tables(card_desc):
 # Seismic Data Section
 ## let's replace this to make it easier to understand
 
+spec_desc = "These graphs display summary spectrograms for the last 5 days. Data is updated every 6 hours."
 def build_summaryspec_component(card_desc):
     num_pages = math.ceil(len(stationsoptions) / 3)
     #card_title_id, open_expand_button_id, close_expand_button_id, modal_body_id, modal_id, graph_div_id, full_card_id, element_styling = None
@@ -348,7 +362,7 @@ def build_summaryspec_component(card_desc):
             dbc.Modal(
                 [
                 dbc.ModalHeader([html.H4("Description", className="card-title")]),
-                card_desc
+                dbc.ModalBody(card_desc)
                 ],
                 id="specsum-q-modal-id",
                 is_open=False,
@@ -365,7 +379,7 @@ def build_summaryspec_component(card_desc):
 
 ## Method to get all elements of home page
 def get_all_home_elements():
-    return [get_weather_row(""), build_summaryspec_component(""), get_log_tables(""),]
+    return [get_weather_row(weather_desc), build_summaryspec_component(spec_desc), get_log_tables(log_desc),]
 
 
 ### ALL CALLBACKS ###
@@ -384,8 +398,6 @@ def get_all_home_elements():
         State("timeframepicker", "start_date"),
         State("timeframepicker", "end_date"),
         State("dropdownwavefilt", "value"), 
-        memoize=True, 
-
 )
 def update_seismic_page(submitted, fig, station, start_date, end_date, wavefilt):
     ctx = callback_context
@@ -399,7 +411,6 @@ def update_seismic_page(submitted, fig, station, start_date, end_date, wavefilt)
                                         wavefilt, fig)
         spectrogram = calculations.create_spectrogram(waveform)
         psd = calculations.create_psd(waveform, inventory)
-        print(time.time() - start, flush = True)
 
     return [Serverside(fig), waveform_graph, spectrogram, psd]
 
@@ -475,8 +486,59 @@ def update_y_timeseries(currFigure, clickData):
     return currFigure
 
 
-# Home Page Callbacks
+## System Monitoring Page Callbacks
+#CPU, Memory, & Disk space Callback
+@app.callback(
+        Output("cu_graph", "children"), 
+        Output("mu_graph", "children"), 
+        Output("fu_graph", "children"), 
+        State("u_datepicker", "start_date"), 
+        State("u_datepicker", "end_date"), 
+        Input("monu_formsubmitbut", "n_clicks")
+)
+def update_sysmon(start, end, n_clicks):
+    return calculations.get_cmd(start, end)
 
+# Monitoring Voltage, Current, Temp. Callbacks
+@app.callback(
+        Output("v2b_graph", "children"), 
+        Output("vFb_graph", "children"), 
+        Output("c2b_graph", "children"), 
+        Output("cFb_graph", "children"), 
+        Output("tIb_graph", "children"), 
+        State("monvct_datepicker", "start_date"), 
+        State("monvct_datepicker", "end_date"), 
+        Input("monvct_formsubmitbut", "n_clicks")
+)
+def update_sysmon(start, end, n_clicks):
+    return calculations.get_vct(start, end)
+
+#Pressure, Humidity inside Box callback
+@app.callback(
+        Output("pIb_graph", "children"), 
+        Output("hIb_graph", "children"), 
+        State("ph_datepicker", "start_date"), 
+        State("ph_datepicker", "end_date"), 
+        Input("monph_formsubmitbut", "n_clicks")
+)
+def update_sysmon(start, end, n_clicks):
+    return calculations.get_ph(start, end)
+
+@app.callback(
+        Output("gx_graph", "children"), 
+        Output("gy_graph", "children"), 
+        Output("gz_graph", "children"), 
+        Output("ax_graph", "children"), 
+        Output("ay_graph", "children"), 
+        Output("az_graph", "children"), 
+        State("monga_datepicker", "start_date"), 
+        State("monga_datepicker", "end_date"), 
+        Input("monga_formsubmitbut", "n_clicks")
+)
+def update_sysmon(start, end, n_clicks):
+    return calculations.get_ga(start, end)
+
+# Home Page Callbacks
 # Callback to update summary spectrogram
 @app.callback( 
         Output("sumspec1", "children"),
@@ -512,6 +574,168 @@ def update_spec_home_page(station):
 
 
 ## Callbacks to handle opening and closing of Description Modals
+@app.callback( ## this is a form one move it later
+        Output("monuq-modal", "is_open"), 
+        Input("open-monuq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback( ## this is a form one move it later
+        Output("mongaq-modal", "is_open"), 
+        Input("open-mongaq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback( ## this is a form one move it later
+        Output("monphq-modal", "is_open"), 
+        Input("open-monphq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback( ## this is a form one move it later
+        Output("monvctq-modal", "is_open"), 
+        Input("open-monvctq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("cu-q-modal", "is_open"), 
+        Input("open-cu-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("mu-q-modal", "is_open"), 
+        Input("open-mu-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("fu-q-modal", "is_open"), 
+        Input("open-fu-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+
+@app.callback(
+        Output("gx-q-modal", "is_open"), 
+        Input("open-gx-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gy-q-modal", "is_open"), 
+        Input("open-gy-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("gz-q-modal", "is_open"), 
+        Input("open-gz-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("ax-q-modal", "is_open"), 
+        Input("open-ax-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("ay-q-modal", "is_open"), 
+        Input("open-ay-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("az-q-modal", "is_open"), 
+        Input("open-az-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("hIb-q-modal", "is_open"), 
+        Input("open-hIb-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("pIb-q-modal", "is_open"), 
+        Input("open-pIb-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("v2b-q-modal", "is_open"), 
+        Input("open-v2b-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("vFb-q-modal", "is_open"), 
+        Input("open-vFb-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("c2b-q-modal", "is_open"), 
+        Input("open-c2b-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+@app.callback(
+        Output("cFb-q-modal", "is_open"), 
+        Input("open-cFb-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
+
+@app.callback(
+        Output("tIb-q-modal", "is_open"), 
+        Input("open-tIb-q-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+
 @app.callback(
         Output("waveformq-modal", "is_open"), 
         Input("open-waveformq-button", "n_clicks"), 
@@ -712,14 +936,12 @@ def open_description(n_clicks):
 
 ## Callbacks to handle opening and closing of Expand Modals
 def update_axis_ranges(graph):
-    print(graph, flush = True)
     if graph and "figure" in graph["props"] and "layout" in graph["props"]["figure"] and "xaxis" in graph["props"]["figure"]["layout"] and "yaxis" in graph["props"]["figure"]["layout"]:
         graph["props"]["figure"]["layout"]["xaxis"]["autorange"] = True
         graph["props"]["figure"]["layout"]["yaxis"]["autorange"] = True
 
 def update_expand(ctx, open_button_id, close_button_id, modal_open, modal_graph, page_graph):
     which_inp = ctx.triggered_id if not None else 'No clicks yet'
-    print(which_inp, flush = True)
     if which_inp == open_button_id:
         if modal_open: ## should never happen but just in case
             update_axis_ranges(modal_graph)
@@ -737,6 +959,255 @@ def update_expand(ctx, open_button_id, close_button_id, modal_open, modal_graph,
     else:
         return no_update
 
+## CPU, Memory, Disk Space
+@app.callback(
+    Output("cu-modal-body", "children"), 
+    Output("cu-modal", "is_open"),
+    Output("cu_graph", "children", allow_duplicate=True), 
+    State("cu_graph", "children"), 
+    State("cu-modal-body", "children"), 
+    State("cu-modal", "is_open"),
+    Input("open-cu-modal", "n_clicks"), 
+    Input("close-cu-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-cu-modal", "close-cu-modal", modal_open, 
+                  modal_graph, page_graph)
+
+@app.callback(
+    Output("mu-modal-body", "children"), 
+    Output("mu-modal", "is_open"),
+    Output("mu_graph", "children", allow_duplicate=True), 
+    State("mu_graph", "children"), 
+    State("mu-modal-body", "children"), 
+    State("mu-modal", "is_open"),
+    Input("open-mu-modal", "n_clicks"), 
+    Input("close-mu-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-mu-modal", "close-mu-modal", modal_open, 
+                  modal_graph, page_graph)
+
+@app.callback(
+    Output("fu-modal-body", "children"), 
+    Output("fu-modal", "is_open"),
+    Output("fu_graph", "children", allow_duplicate=True), 
+    State("fu_graph", "children"), 
+    State("fu-modal-body", "children"), 
+    State("fu-modal", "is_open"),
+    Input("open-fu-modal", "n_clicks"), 
+    Input("close-fu-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-fu-modal", "close-fu-modal", modal_open, 
+                  modal_graph, page_graph)
+
+## Gyroscope
+@app.callback(
+    Output("gx-modal-body", "children"), 
+    Output("gx-modal", "is_open"),
+    Output("gx_graph", "children", allow_duplicate=True), 
+    State("gx_graph", "children"), 
+    State("gx-modal-body", "children"), 
+    State("gx-modal", "is_open"),
+    Input("open-gx-modal", "n_clicks"), 
+    Input("close-gx-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gx-modal", "close-gx-modal", modal_open, 
+                  modal_graph, page_graph)
+
+@app.callback(
+    Output("gy-modal-body", "children"), 
+    Output("gy-modal", "is_open"),
+    Output("gy_graph", "children", allow_duplicate=True), 
+    State("gy_graph", "children"), 
+    State("gy-modal-body", "children"), 
+    State("gy-modal", "is_open"),
+    Input("open-gy-modal", "n_clicks"), 
+    Input("close-gy-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gy-modal", "close-gy-modal", modal_open, 
+                  modal_graph, page_graph)
+
+@app.callback(
+    Output("gz-modal-body", "children"), 
+    Output("gz-modal", "is_open"),
+    Output("gz_graph", "children", allow_duplicate=True), 
+    State("gz_graph", "children"), 
+    State("gz-modal-body", "children"), 
+    State("gz-modal", "is_open"),
+    Input("open-gz-modal", "n_clicks"), 
+    Input("close-gz-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-gz-modal", "close-gz-modal", modal_open, 
+                  modal_graph, page_graph)
+
+##Acceleration 
+@app.callback(
+    Output("ax-modal-body", "children"), 
+    Output("ax-modal", "is_open"),
+    Output("ax_graph", "children", allow_duplicate=True), 
+    State("ax_graph", "children"), 
+    State("ax-modal-body", "children"), 
+    State("ax-modal", "is_open"),
+    Input("open-ax-modal", "n_clicks"), 
+    Input("close-ax-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-ax-modal", "close-ax-modal", modal_open, 
+                  modal_graph, page_graph)
+
+@app.callback(
+    Output("ay-modal-body", "children"), 
+    Output("ay-modal", "is_open"),
+    Output("ay_graph", "children", allow_duplicate=True), 
+    State("ay_graph", "children"), 
+    State("ay-modal-body", "children"), 
+    State("ay-modal", "is_open"),
+    Input("open-ay-modal", "n_clicks"), 
+    Input("close-ay-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-ay-modal", "close-ay-modal", modal_open, 
+                  modal_graph, page_graph)
+
+@app.callback(
+    Output("az-modal-body", "children"), 
+    Output("az-modal", "is_open"),
+    Output("az_graph", "children", allow_duplicate=True), 
+    State("az_graph", "children"), 
+    State("az-modal-body", "children"), 
+    State("az-modal", "is_open"),
+    Input("open-az-modal", "n_clicks"), 
+    Input("close-az-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-az-modal", "close-az-modal", modal_open, 
+                  modal_graph, page_graph)
+
+##Pressure Inside Box
+@app.callback(
+    Output("pIb-modal-body", "children"), 
+    Output("pIb-modal", "is_open"),
+    Output("pIb_graph", "children", allow_duplicate=True), 
+    State("pIb_graph", "children"), 
+    State("pIb-modal-body", "children"), 
+    State("pIb-modal", "is_open"),
+    Input("open-pIb-modal", "n_clicks"), 
+    Input("close-pIb-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-pIb-modal", "close-pIb-modal", modal_open, 
+                  modal_graph, page_graph)
+
+##Humidity Inside Box
+@app.callback(
+    Output("hIb-modal-body", "children"), 
+    Output("hIb-modal", "is_open"),
+    Output("hIb_graph", "children", allow_duplicate=True), 
+    State("hIb_graph", "children"), 
+    State("hIb-modal-body", "children"), 
+    State("hIb-modal", "is_open"),
+    Input("open-hIb-modal", "n_clicks"), 
+    Input("close-hIb-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-hIb-modal", "close-hIb-modal", modal_open, 
+                  modal_graph, page_graph)
+
+##Voltage to Battery
+@app.callback(
+    Output("v2b-modal-body", "children"), 
+    Output("v2b-modal", "is_open"),
+    Output("v2b_graph", "children", allow_duplicate=True), 
+    State("v2b_graph", "children"), 
+    State("v2b-modal-body", "children"), 
+    State("v2b-modal", "is_open"),
+    Input("open-v2b-modal", "n_clicks"), 
+    Input("close-v2b-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-v2b-modal", "close-v2b-modal", modal_open, 
+                  modal_graph, page_graph)
+
+##Voltage from Battery
+@app.callback(
+    Output("vFb-modal-body", "children"), 
+    Output("vFb-modal", "is_open"),
+    Output("vFb_graph", "children", allow_duplicate=True), 
+    State("vFb_graph", "children"), 
+    State("vFb-modal-body", "children"), 
+    State("vFb-modal", "is_open"),
+    Input("open-vFb-modal", "n_clicks"), 
+    Input("close-vFb-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-vFb-modal", "close-vFb-modal", modal_open, 
+                  modal_graph, page_graph)
+
+##Current from Battery
+@app.callback(
+    Output("cFb-modal-body", "children"), 
+    Output("cFb-modal", "is_open"),
+    Output("cFb_graph", "children", allow_duplicate=True), 
+    State("cFb_graph", "children"), 
+    State("cFb-modal-body", "children"), 
+    State("cFb-modal", "is_open"),
+    Input("open-cFb-modal", "n_clicks"), 
+    Input("close-cFb-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-cFb-modal", "close-cFb-modal", modal_open, 
+                  modal_graph, page_graph)
+
+##Current to Battery
+@app.callback(
+    Output("c2b-modal-body", "children"), 
+    Output("c2b-modal", "is_open"),
+    Output("c2b_graph", "children", allow_duplicate=True), 
+    State("c2b_graph", "children"), 
+    State("c2b-modal-body", "children"), 
+    State("c2b-modal", "is_open"),
+    Input("open-c2b-modal", "n_clicks"), 
+    Input("close-c2b-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-c2b-modal", "close-c2b-modal", modal_open, 
+                  modal_graph, page_graph)
+
+##Temperature Inside Box
+@app.callback(
+    Output("tIb-modal-body", "children"), 
+    Output("tIb-modal", "is_open"),
+    Output("tIb_graph", "children", allow_duplicate=True), 
+    State("tIb_graph", "children"), 
+    State("tIb-modal-body", "children"), 
+    State("tIb-modal", "is_open"),
+    Input("open-tIb-modal", "n_clicks"), 
+    Input("close-tIb-modal", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-tIb-modal", "close-tIb-modal", modal_open, 
+                  modal_graph, page_graph)
 
 ##Open/Close home page spectrogram modals
 @app.callback(
@@ -751,7 +1222,6 @@ def update_expand(ctx, open_button_id, close_button_id, modal_open, modal_graph,
     prevent_initial_call=True,
 )
 def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
-    print(page_graph, flush = True)
     return update_expand(ctx, "sumspec-card1-expand-button-id", "sumspec-card1-close-button-id", modal_open, 
                   modal_graph, page_graph)
 
@@ -767,7 +1237,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     prevent_initial_call=True,
 )
 def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
-    print(page_graph, flush = True)
     return update_expand(ctx, "sumspec-card2-expand-button-id", "sumspec-card2-close-button-id", modal_open, 
                   modal_graph, page_graph)
 
@@ -783,7 +1252,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     prevent_initial_call=True,
 )
 def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
-    print(page_graph, flush = True)
     return update_expand(ctx, "sumspec-card3-expand-button-id", "sumspec-card3-close-button-id", modal_open, 
                   modal_graph, page_graph)
 
@@ -800,7 +1268,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     prevent_initial_call=True,
 )
 def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
-    print(page_graph, flush = True)
     return update_expand(ctx, "open-waveform-button", "close-waveform-button", modal_open, 
                   modal_graph, page_graph)
 
@@ -1042,8 +1509,14 @@ def render_page_content(pathname):
         return dbc.Container(gps.get_all_gps_elements(), fluid=True)
     elif pathname =="/gpsdeform":
         return dbc.Container(gpsvis.get_all_gpsvis_elements(), fluid=True)
-    elif pathname == "/sysmon":
-        return html.P("Oh cool, this is the system monitoring page!")
+    elif pathname == "/monvct":
+        return dbc.Container(monvct.get_all_monvct_elements(), fluid=True)
+    elif pathname == "/monph":
+        return dbc.Container(monph.get_all_monph_elements(), fluid=True)
+    elif pathname == "/monga":
+        return dbc.Container(monga.get_all_monga_elements(), fluid=True)
+    elif pathname == "/monu":
+        return dbc.Container(monu.get_all_monu_elements(), fluid=True)
     # If the user tries to reach a different page, return a 404 message
     return html.Div(
         [
@@ -1068,4 +1541,4 @@ def update_fig(relayoutdata, fig):
     return fig.construct_update_data(relayoutdata)
 
 if __name__ == "__main__":
-    app.run_server(host="0.0.0.0", debug=True)
+    app.run_server(host="0.0.0.0", port="8080", debug=True)

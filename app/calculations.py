@@ -34,6 +34,7 @@ from datashader import reductions as rd
 import io
 from geographiclib.geodesic import Geodesic
 
+
 matplotlib.use('agg') # prevents matplotlib from plotting (might be useful in obspy methods)
 load_dotenv()
 
@@ -137,6 +138,7 @@ def create_waveform_graph(net, sta, chan, starttime, endtime, extract, fig):
     )
     
     fig.update_layout(template='plotly_dark')
+    print("hiii1", flush = True)
     return  [dcc.Graph(figure = fig, id = "waveformgraphgr", style={"height": "100%"}), ret, inventory]
 
 
@@ -164,6 +166,7 @@ def create_psd(currWaveForm, currInventory):
     xaxis_title='Frequency (Hz)',
     yaxis_title='Amplitude (dB)',
     )
+    print("hii", flush = True)
     return dcc.Graph(figure = fig, style={"height": "100%"})
 
 
@@ -202,10 +205,11 @@ def create_spectrogram(currWaveForm):
     yaxis_title='Frequency (Hz)',
     )
     fig.update_layout(
-    margin=dict(l=5,r=5,b=5,t=20),
+    margin=dict(l=5,r=5,b=5,t=20), coloraxis_showscale=False
     )
     fig.update_layout(template='plotly_dark')
     retGraph = dcc.Graph(figure = fig, style={"height": "100%"})
+
     return retGraph
 
 
@@ -560,7 +564,266 @@ def get_baseline_graphs(start_date, end_date, ref_station):
 
     fig_orient_residual.update_layout(
         xaxis_title="Date",
-        yaxis_title="Distance (m)",
+        yaxis_title="Angle (degrees)",
     )
      
     return dcc.Graph(figure = fig_distance, style={"height": "100%"}), dcc.Graph(figure = fig_orient, style={"height": "100%"}), dcc.Graph(figure = fig_distance_residual, style={"height": "100%"}), dcc.Graph(figure = fig_orient_residual, style={"height": "100%"}), dcc.Graph(figure = fig_east_north, style={"height": "100%"})
+
+
+## System Monitoring Page
+
+##Voltage, Current, & Temp. Monitoring Page
+def get_vct(starttime, endtime):
+    conn = sqlite3.connect("database/sqlitedata.db")
+    cur = conn.cursor()
+    query = f"""SELECT timestamp, station, voltageToBattery, currentToBattery, voltageFrBattery, currentFrBattery, tempInside 
+    FROM sysmon_data WHERE timestamp >= ? AND timestamp <= ?; """
+    query_inputs  = (starttime, endtime)
+    cur.execute(query, query_inputs)
+    all_results = cur.fetchall()
+
+    if not all_results:
+        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+    
+    times, stations, v2b, c2b, vFb, cFb, tI = [], [], [], [], [], [], []
+    for res in all_results:
+        times.append(res[0])
+        stations.append(res[1])
+        v2b.append(res[2])
+        c2b.append(res[3])
+        vFb.append(res[4])
+        cFb.append(res[5])
+        tI.append(res[6])
+
+    df = pd.DataFrame({
+        'Time': times,
+        'Station': stations, 
+        'v2b': v2b, 
+        'vFb': vFb, 
+        'cFb': cFb, 
+        'c2b': c2b, 
+        'tIb': tI
+    })
+
+    v2b_fig = px.scatter(df, x = 'Time', y = 'v2b', color = 'Station')
+    v2b_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Voltage to Battery (V)",
+    )
+
+    vFb_fig = px.scatter(df, x = 'Time', y = 'vFb', color = 'Station')
+    vFb_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Voltage from Battery (V)",
+    )
+
+    c2b_fig = px.scatter(df, x = 'Time', y = 'c2b', color = 'Station')
+    c2b_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Current to Battery (A)",
+    )
+
+    cFb_fig = px.scatter(df, x = 'Time', y = 'cFb', color = 'Station')
+    cFb_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Current From Battery (A)",
+    )
+
+    tIb_fig = px.scatter(df, x = 'Time', y = 'tIb', color = 'Station')
+    tIb_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Temperature in Box (C)",
+    )
+    
+
+    v2b_fig.update_layout(template='plotly_dark')
+    vFb_fig.update_layout(template='plotly_dark')
+    c2b_fig.update_layout(template='plotly_dark')
+    cFb_fig.update_layout(template='plotly_dark')
+    tIb_fig.update_layout(template='plotly_dark')
+
+    conn.close()
+    return dcc.Graph(figure = v2b_fig, style={"height": "100%"}), dcc.Graph(figure = vFb_fig, style={"height": "100%"}), dcc.Graph(figure = c2b_fig, style={"height": "100%"}), dcc.Graph(figure = cFb_fig, style={"height": "100%"}), dcc.Graph(figure = tIb_fig, style={"height": "100%"})
+
+
+##Pressure and Humidity Inside the Box
+def get_ph(starttime, endtime):
+    conn = sqlite3.connect("database/sqlitedata.db")
+    cur = conn.cursor()
+    query = f"""SELECT timestamp, station, pressInside, humidInside
+    FROM sysmon_data WHERE timestamp >= ? AND timestamp <= ?; """
+    query_inputs  = (starttime, endtime)
+    cur.execute(query, query_inputs)
+    all_results = cur.fetchall()
+
+    if not all_results:
+        return dbc.Label("No data was found."), dbc.Label("No data was found.")
+    
+    times, stations, pIb, hIb= [], [], [], []
+    for res in all_results:
+        times.append(res[0])
+        stations.append(res[1])
+        pIb.append(res[2])
+        hIb.append(res[3])
+
+    df = pd.DataFrame({
+        'Time': times,
+        'Station': stations, 
+        'pIb': pIb, 
+        'hIb': hIb
+    })
+
+    pIb_fig = px.scatter(df, x = 'Time', y = 'pIb', color = 'Station')
+    pIb_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Pressure Inside Box (mb)",
+    )
+
+    hIb_fig = px.scatter(df, x = 'Time', y = 'hIb', color = 'Station')
+    hIb_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Humidity Inside Box (%)",
+    )
+
+    pIb_fig.update_layout(template='plotly_dark')
+    hIb_fig.update_layout(template='plotly_dark')
+
+    conn.close()
+    return dcc.Graph(figure = pIb_fig, style={"height": "100%"}), dcc.Graph(figure = hIb_fig, style={"height": "100%"})
+
+## Gyroscope & Acceleration Callbacks
+def get_ga(starttime, endtime):
+    conn = sqlite3.connect("database/sqlitedata.db")
+    cur = conn.cursor()
+    query = f"""SELECT timestamp, station, gyroX, gyroY, gyroZ, accelX, accelY, accelZ
+    FROM sysmon_data WHERE timestamp >= ? AND timestamp <= ?; """
+    query_inputs  = (starttime, endtime)
+    cur.execute(query, query_inputs)
+    all_results = cur.fetchall()
+
+    if not all_results:
+        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+    
+    times, stations, gx, gy, gz, ax, ay, az= [], [], [], [], [], [], [], []
+    for res in all_results:
+        times.append(res[0])
+        stations.append(res[1])
+        gx.append(res[2])
+        gy.append(res[3])
+        gz.append(res[4])
+        ax.append(res[5])
+        ay.append(res[6])
+        az.append(res[7])
+
+    df = pd.DataFrame({
+        'Time': times,
+        'Station': stations, 
+        'gx': gx, 
+        'gy': gy, 
+        'gz': gz,
+        'ax': ax,  
+        'ay': ay,
+        'az': az  
+    })
+
+    gx_fig = px.scatter(df, x = 'Time', y = 'gx', color = 'Station')
+    gx_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Gyroscope X (deg/s)",
+    )
+
+    gy_fig = px.scatter(df, x = 'Time', y = 'gy', color = 'Station')
+    gy_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Gyroscope Y (deg/s)",
+    )
+
+    gz_fig = px.scatter(df, x = 'Time', y = 'gz', color = 'Station')
+    gz_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Gyroscope Z (deg/s)",
+    )
+
+    ax_fig = px.scatter(df, x = 'Time', y = 'ax', color = 'Station')
+    ax_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Accelerometer X (m/s^2)",
+    )
+
+    ay_fig = px.scatter(df, x = 'Time', y = 'ay', color = 'Station')
+    ay_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Accelerometer Y (m/s^2)",
+    )
+
+    az_fig = px.scatter(df, x = 'Time', y = 'az', color = 'Station')
+    az_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Accelerometer Z (m/s^2)",
+    )
+
+    gx_fig.update_layout(template='plotly_dark')
+    gy_fig.update_layout(template='plotly_dark')
+    gz_fig.update_layout(template='plotly_dark')
+
+    ax_fig.update_layout(template='plotly_dark')
+    ay_fig.update_layout(template='plotly_dark')
+    az_fig.update_layout(template='plotly_dark')
+
+    conn.close()
+    return dcc.Graph(figure = gx_fig, style={"height": "100%"}), dcc.Graph(figure = gy_fig, style={"height": "100%"}), dcc.Graph(figure = gz_fig, style={"height": "100%"}), dcc.Graph(figure = ax_fig, style={"height": "100%"}), dcc.Graph(figure = ay_fig, style={"height": "100%"}), dcc.Graph(figure = az_fig, style={"height": "100%"})
+
+
+## CPU, Memory, & Disk Space Usage
+def get_cmd(starttime, endtime):
+    conn = sqlite3.connect("database/sqlitedata.db")
+    cur = conn.cursor()
+    query = f"""SELECT timestamp, station, cpu, memory, diskspace
+    FROM sysmon_data WHERE timestamp >= ? AND timestamp <= ?; """
+    query_inputs  = (starttime, endtime)
+    cur.execute(query, query_inputs)
+    all_results = cur.fetchall()
+
+    if not all_results:
+        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+    
+    times, stations, cpu, mem, disk= [], [], [], [], []
+    for res in all_results:
+        times.append(res[0])
+        stations.append(res[1])
+        cpu.append(res[2])
+        mem.append(res[3])
+        disk.append(res[4])
+
+    df = pd.DataFrame({
+        'Time': times,
+        'Station': stations, 
+        'cpu': cpu, 
+        'mem': mem, 
+        'disk': disk
+    })
+
+    cpu_fig = px.scatter(df, x = 'Time', y = 'cpu', color = 'Station')
+    cpu_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="CPU Usage (%)",
+    )
+
+    mem_fig = px.scatter(df, x = 'Time', y = 'mem', color = 'Station')
+    mem_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Memory Usage (%)",
+    )
+
+    disk_fig = px.scatter(df, x = 'Time', y = 'disk', color = 'Station')
+    disk_fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Free Disk Space (GB)",
+    )
+
+    cpu_fig.update_layout(template='plotly_dark')
+    mem_fig.update_layout(template='plotly_dark')
+    disk_fig.update_layout(template='plotly_dark')
+
+    conn.close()
+    return dcc.Graph(figure = cpu_fig, style={"height": "100%"}), dcc.Graph(figure = mem_fig, style={"height": "100%"}), dcc.Graph(figure = disk_fig, style={"height": "100%"})
