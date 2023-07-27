@@ -1,13 +1,11 @@
-## this will also be executed every night at 3 AM 
-
 import requests
-import sys
 import os
 from dotenv import load_dotenv
 import ast
 import sqlite3
 from sqlite3 import Error
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
+import logmethods
 
 ''' GPS Data is Formatted 
             1.   COVE      station name
@@ -39,7 +37,9 @@ load_dotenv()
 
 ## gps stations
 gps_stations = ast.literal_eval(os.environ["GPS_STATIONS"])
-print(gps_stations)
+gps_table = os.environ["GPS_TABLE_NAME"]
+db_name = os.environ["DATABASE_NAME"]
+log_file = os.environ["GPS_LOG_LOC"]
 
 def create_connection(db_file):
     """ create a database connection to a SQLite database """
@@ -54,9 +54,9 @@ def create_connection(db_file):
             return conn
 
 def download_gps_data(url, conn, station_name):
-    #station: FTP4
+
     # Makes request of URL, stores response in variable r
-    db_name = "gps_data"
+    table_name = gps_table
     r = requests.get(url)
     cur = conn.cursor()
     all_data = r.text
@@ -69,54 +69,34 @@ def download_gps_data(url, conn, station_name):
             curr_line = all_lines[ind].split() ## gets current line
             datetime_str = curr_line[1]
             datetime_obj = datetime.strptime(datetime_str, "%y%b%d")
-
-            check_query = f"""SELECT EXISTS(SELECT * FROM {db_name} WHERE timestamp=? AND station=?);"""
+            check_query = f"""SELECT EXISTS(SELECT * FROM {table_name} WHERE timestamp=? AND station=?);"""
             check_data_tuple = (str(datetime_obj),station_name,)
             cur.execute(check_query, check_data_tuple)
             check_res = cur.fetchall()
 
             if check_res[0][0] == 1:
                 break
+            
             ### now you are planning to add it to database
             ##Data was found- so add file to logs
-            lines = None
-            with open("logs/gps_log.txt", "r+") as f:
-                lines = f.readlines()
-                lines = [j.strip() for j in lines if j and j!="\n"]
-                if not lines:
-                    f.write("Station Date Data-date")
-                if len(lines) <= 500:
-                    lines = None
-                elif len(lines) > 500:
-                    lines = lines[len(lines) - 150:]
-                f.close()
-            if lines:
-                with open("logs/gps_log.txt", "w") as sf:
-                    sf.write("Station Date Data-date")
-                    for l in lines:
-                        sf.write("\n"+l)
-                    sf.close()
-            with open("logs/gps_log.txt", "a") as f:
-                f.write(f"""\n{station_name} {str(date.today()).replace('-', '/')} {str(datetime_obj)[:10].replace('-', '/')}""")
-                f.close()
-
+            new_line = f"""\n{station_name} {str(date.today()).replace('-', '/')} {str(datetime_obj)[:10].replace('-', '/')}"""
+            logmethods.write_to_log(log_file, "Station Download-Date Data-date", new_line)
+        
             query = f"""
-            INSERT INTO {db_name} (timestamp, station, eastingsi, eastingsf, northingsi, northingsf, 
+            INSERT INTO {table_name} (timestamp, station, eastingsi, eastingsf, northingsi, northingsf, 
             verticali, verticalf, reflongitude, currlatitude, currlongitude, currheight)
             VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
             
             data_tuple = (str(datetime_obj), station_name, curr_line[7], curr_line[8], curr_line[9], 
                           curr_line[10], curr_line[11], curr_line[12], curr_line[6], curr_line[20], curr_line[21], curr_line[22])
-            cur.execute(query, data_tuple) ## inserted
+            cur.execute(query, data_tuple) ## inserted data into database
 
         ind -= 1
 
 
 def download_nightly_gps_data():
-    conn = create_connection("database/sqlitedata.db")
+    conn = create_connection(db_name)
     for station in gps_stations: 
         download_gps_data(f"""http://geodesy.unr.edu/gps_timeseries/tenv3/IGS14/{station}.tenv3""", conn, station)
     conn.commit()
     conn.close()
-
-download_nightly_gps_data()

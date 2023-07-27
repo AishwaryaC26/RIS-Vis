@@ -1,4 +1,4 @@
-Date Filename
+Download-Date Filename
 2023/07/07 https://amrc.ssec.wisc.edu/data/ftp/pub/aws/q3h/2008/mln200811q3h.txt
 2023/07/07 https://amrc.ssec.wisc.edu/data/ftp/pub/aws/q3h/2008/mln200812q3h.txt
 2023/07/07 https://amrc.ssec.wisc.edu/data/ftp/pub/aws/q3h/2009/mln200901q3h.txt

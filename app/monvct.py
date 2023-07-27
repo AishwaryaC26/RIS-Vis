@@ -1,8 +1,5 @@
-import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, dcc, html, State
 import elementstyling, componentbuilder
-from datetime import date, timedelta 
 import componentbuilder
 
 form_desc = "Use this form to visualize voltage, current, and temperature data of the SGIP."
@@ -17,6 +14,7 @@ cFb_desc = "This graph displays current from the battery over time."
 
 tIb_desc = "This graph displays temperature inside the battery over time."
 
+# method to get all voltage, current, & temperature page components
 def get_all_monvct_elements():
     monvct_form = componentbuilder.build_form_component("Voltage, Current, & Temperature Data Visualization Form", [], 
                                                      [("Select date range:", "monvct_datepicker")], "monvct_formsubmitbut", "open-monvctq-button", "monvctq-modal", form_desc, elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)

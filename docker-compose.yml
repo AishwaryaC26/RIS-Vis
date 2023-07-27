@@ -4,14 +4,13 @@ services:
     scheduler:
         build: ./backend
         restart: always
-        #env_file: .env
         volumes:
             - ./database:/backend/database
             - ./logs:/backend/logs
+            - ./.env:/backend/.env
     app:
         build: ./app
         restart: always
-        #env_file: .env
         ports: 
           - 8080:8080
         depends_on: 
@@ -21,6 +20,7 @@ services:
             - ./app:/app
             - ./database:/app/database
             - ./logs:/app/logs 
+            - ./.env:/app/.env
     redis:
         image: "redis:latest"
         ports:

@@ -1,4 +1,4 @@
-Station Date Filename
+Station Download-Date Filename
 HOO 2023/07/07 "2023/07/06.mseed - NA"
 CONZ 2023/07/07 "2023/07/06.mseed - NA"
 ELHT 2023/07/07 "2023/07/06.mseed - NA"

@@ -6,26 +6,33 @@ import os
 from dotenv import load_dotenv
 import ast
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 import sqlite3
-from os.path import exists
 import io
+import logmethods
+
 
 load_dotenv()
-
 stations = ast.literal_eval(os.environ["SEISMIC_STATIONS"])
+
 #create list of stations from "stations" dict
 stationsoptions = list(stations.keys())
+database_name = os.environ["DATABASE_NAME"]
+seismic_table = os.environ["SEISMIC_TABLE_NAME"]
+seismic_log = os.environ["SEISMIC_LOG_LOC"]
 
+print("seismic db", database_name)
+print("seismic table", seismic_table)
+print("seismic log", seismic_log)
 
 def nightly_download_mseed_waveform():
-    ## ACCOUNTING FOR MISSED DOWNLOAD: in case a downloading is missed, we should download everything from the day before
+    ## ACCOUNTING FOR MISSED DOWNLOAD: in case a download is missed, method downloads everything from the day before
     ## and go back until all gaps are filled.
     print("downloading seismic data...")
     client = Client('IRIS')
-    conn = sqlite3.connect("database/sqlitedata.db")
+    conn = sqlite3.connect(database_name)
     cur = conn.cursor()
-    db_name = "seismic_data"
+    table_name = seismic_table
     writeFile = io.BytesIO()
 
     ## start date:
@@ -33,7 +40,7 @@ def nightly_download_mseed_waveform():
     date_today = date.today() - timedelta(days=1) 
 
     ## checking initial
-    check_query = f"""SELECT EXISTS(SELECT * FROM {db_name} WHERE timestamp=?);"""
+    check_query = f"""SELECT EXISTS(SELECT * FROM {table_name} WHERE timestamp=?);"""
     check_data_tuple = (str(date_today)[:10],)
     cur.execute(check_query, check_data_tuple)
     check_res = cur.fetchall()
@@ -55,35 +62,18 @@ def nightly_download_mseed_waveform():
                 st.write(writeFile, format="MSEED") #download mseed file
                 binaryData = convertToBinaryData(writeFile)
 
-            lines = None
-            with open("logs/seismic_log.txt", "r+") as f:
-                lines = f.readlines()
-                lines = [j.strip() for j in lines if j and j!="\n"]
-                if not lines:
-                    f.write("Station Date Filename")
-                if len(lines) <= 500:
-                    lines = None
-                elif len(lines) > 500:
-                    lines = lines[len(lines) - 150:]
-                f.close()
-            if lines:
-                with open("logs/seismic_log.txt", "w") as sf:
-                    sf.write("Station Date Filename")
-                    for l in lines:
-                        sf.write("\n"+l)
-                    sf.close()
-            with open("logs/seismic_log.txt", "a") as f:
-                if not st: 
-                    f.write(f"""\n{station} {str(date.today()).replace('-', '/')} \"{str(date_today).replace('-','/')}.mseed - NA\"""")
-                else:
-                    f.write(f"""\n{station} {str(date.today()).replace('-', '/')} {str(date_today).replace('-','/')}.mseed""")
-                f.close()
+            if not st:
+                new_line = f"""\n{station} {str(date.today()).replace('-', '/')} \"{str(date_today).replace('-','/')}.mseed - NA\""""
+            else:
+                new_line = f"""\n{station} {str(date.today()).replace('-', '/')} {str(date_today).replace('-','/')}.mseed"""
 
+            logmethods.write_to_log(seismic_log, "Station Download-Date Filename", new_line)
+        
             '''
             Insert time stamp, BLOB file
             '''
             query = f"""
-            INSERT INTO {db_name} (timestamp, station, mseed)
+            INSERT INTO {table_name} (timestamp, station, mseed)
             VALUES(?, ?, ?);"""
             data_tuple = (str(date_today), station, binaryData)
             cur.execute(query, data_tuple)
@@ -93,7 +83,7 @@ def nightly_download_mseed_waveform():
         date_to_download = UTCDateTime(date_today)
 
         ## check whether new date is in table
-        check_query = f"""SELECT EXISTS(SELECT * FROM {db_name} WHERE timestamp=?);"""
+        check_query = f"""SELECT EXISTS(SELECT * FROM {table_name} WHERE timestamp=?);"""
         check_data_tuple = (str(date_today)[:10],)
         cur.execute(check_query, check_data_tuple)
         check_res = cur.fetchall()
@@ -105,5 +95,6 @@ def nightly_download_mseed_waveform():
 def convertToBinaryData(filename):
     # Convert digital data to binary format
     return filename.getvalue()
+
 
 

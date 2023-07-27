@@ -1,14 +1,13 @@
-import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, dcc, html, State
 import elementstyling, componentbuilder
-from datetime import date, timedelta 
 import ast, os
 import componentbuilder
 from dotenv import load_dotenv
 
 
 load_dotenv()
+
+
 gps_stations = ast.literal_eval(os.environ["GPS_STATIONS"])
 coords = ast.literal_eval(os.environ["GPS_STATION_COORDS"])
 form_desc = "Use the GPS Data Visualization form to visualize East, North, and Upwards movements of a GPS station over a specific time period."
@@ -16,6 +15,8 @@ east_desc = "This graph displays the relative East-wards position of a GPS Stati
 north_desc = "This graph displays the relative North-wards position of a GPS Station with respect to a reference meridian."
 up_desc = "This graphs displays the relative vertical position of a GPS Station."
 
+
+## method to get all components on GPS Page
 def get_all_gps_elements():
     gps_form = componentbuilder.build_form_component("GPS Data Visualization Form", [("Select GPS station:", gps_stations, "gps_dropdown"),], 
                                                      [("Select date range:", "gps_datepicker")], "gps_formsubmitbut", "open-gpsq-button", "gpsq-modal", form_desc, elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP, coords)

@@ -1,8 +1,5 @@
-import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, dcc, html, State
 import elementstyling
-from datetime import date, timedelta
 import componentbuilder
 import os, ast
 from dotenv import load_dotenv
@@ -20,6 +17,7 @@ pressure_desc = "This graph displays change in pressure over time."
 
 humid_desc = "This graph displays change in relative humidity over time."
 
+# method to get all weather page components
 def get_all_weather_elements():
     weather_form = componentbuilder.build_form_component("Weather Data Visualization Form", [], [("Select date range:", "weather_datepicker",)], "weather_formsubmitbut", "open-weatherq-button", "weather-q-modal", form_desc, elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP, coords)
     weather_temp_graph = componentbuilder.build_graph_component("Temperature", "open-weather-temp-modal", 

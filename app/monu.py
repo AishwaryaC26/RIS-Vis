@@ -14,6 +14,7 @@ mu_desc = "This graph displays SGIP Memory Usage over time."
 
 fu_desc = "This graph displays SGIP Free Disk Space over time."
 
+# method to get all utility page components
 def get_all_monu_elements():
     monu_form = componentbuilder.build_form_component("Utility Data Visualization Form", [], 
                                                      [("Select date range:", "u_datepicker")], "monu_formsubmitbut", "open-monuq-button", "monuq-modal", form_desc, elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)

@@ -6,7 +6,6 @@ import dash_bootstrap_components as dbc
 
 # Obspy related imports
 from obspy.signal import PPSD
-from obspy.core import UTCDateTime
 from  obspy.core.stream import Stream
 from obspy.core.trace import Trace
 from obspy import read_inventory, read
@@ -38,6 +37,27 @@ from geographiclib.geodesic import Geodesic
 matplotlib.use('agg') # prevents matplotlib from plotting (might be useful in obspy methods)
 load_dotenv()
 
+##load names of tables
+db_name = os.environ["DATABASE_NAME"]
+seismic_table = os.environ["SEISMIC_TABLE_NAME"]
+weather_table = os.environ["WEATHER_TABLE_NAME"]
+sysmon_table = os.environ["SYSMON_TABLE_NAME"]
+gps_table = os.environ["GPS_TABLE_NAME"]
+
+##load error message
+error_message = os.environ["ERROR_MESSAGE"]
+
+##method to help extract rows from database
+def query_database(db_name, query_string, query_inputs):
+    conn = sqlite3.connect(db_name)
+    cur = conn.cursor()
+    cur.execute(query_string, query_inputs)
+    all_results = cur.fetchall()
+    conn.close()
+    return all_results
+
+
+
 ### ALL CALCULATIVE METHODS REQUIRED ###
 
 ### SEISMIC PAGE CALCULATION METHODS ###
@@ -50,7 +70,8 @@ def writeTofile(data, file):
 
 # pulls all seismic data corresponding to a specific station, starttime, and endtime
 def check_database(sta, starttime, endtime):
-    conn = sqlite3.connect("database/sqlitedata.db")
+    db_name = os.environ["DATABASE_NAME"]
+    conn = sqlite3.connect(db_name)
     cur = conn.cursor()
 
     query = f"""SELECT timestamp, mseed FROM seismic_data WHERE timestamp >= ? AND timestamp <= ? AND station == ?;"""
@@ -86,7 +107,9 @@ def create_stream(databres):
 #creates Waveform graph 
 def create_waveform_graph(net, sta, chan, starttime, endtime, extract, fig):
     # query for data from database
-    all_results = check_database(sta, starttime, endtime)
+    query = f"""SELECT timestamp, mseed FROM {seismic_table} WHERE timestamp >= ? AND timestamp <= ? AND station == ?;"""
+    query_inputs  = (starttime[:10], endtime[:10], sta)
+    all_results = query_database(db_name, query, query_inputs)
 
     #creates Obspy inventory object
     inventory = read_inventory(f"""station_inventories/{sta}.xml""")
@@ -94,9 +117,9 @@ def create_waveform_graph(net, sta, chan, starttime, endtime, extract, fig):
     if all_results:
         st = create_stream(all_results)
         if not st:
-            return dbc.Label("No data was found."), None, None
+            return dbc.Label(error_message), None, None
     else:
-        return dbc.Label("No data was found."), None, None  
+        return dbc.Label(error_message), None, None  
      
     ret = st.copy()
     filtered_data = st.remove_response(output = extract, inventory = inventory) ## filter stream based on filter option selected
@@ -138,14 +161,13 @@ def create_waveform_graph(net, sta, chan, starttime, endtime, extract, fig):
     )
     
     fig.update_layout(template='plotly_dark')
-    print("hiii1", flush = True)
     return  [dcc.Graph(figure = fig, id = "waveformgraphgr", style={"height": "100%"}), ret, inventory]
 
 
 ## method to create PSD given Obspy Stream object and Inventory object corresponding to the stream
 def create_psd(currWaveForm, currInventory):
     if not currWaveForm:
-        return dbc.Label("No data was found.")
+        return dbc.Label(error_message)
     
     tr = currWaveForm[0]
     ppsd = PPSD(tr.stats, metadata=currInventory)
@@ -166,14 +188,13 @@ def create_psd(currWaveForm, currInventory):
     xaxis_title='Frequency (Hz)',
     yaxis_title='Amplitude (dB)',
     )
-    print("hii", flush = True)
     return dcc.Graph(figure = fig, style={"height": "100%"})
 
 
 ## method to create spectrogram given Obspy Stream object
 def create_spectrogram(currWaveForm):
     if not currWaveForm:
-        return dbc.Label("No data was found.")
+        return dbc.Label(error_message)
     
     data = currWaveForm[0].data
     samp_rate = float(currWaveForm[0].stats.sampling_rate)
@@ -218,17 +239,14 @@ def create_spectrogram(currWaveForm):
 #creates weather temperature, pressure, and relative humidity graphs given start date and end date
 
 def create_weather_graphs(starttime, endtime):
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
 
     query = f"""SELECT timestamp, temperature, pressure, relhumidity 
-    FROM weather_data WHERE timestamp >= ? AND timestamp <= ?; """
+    FROM {weather_table} WHERE timestamp >= ? AND timestamp <= ?; """
     query_inputs  = (starttime, endtime)
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
+    all_results = query_database(db_name, query, query_inputs)
 
     if not all_results:
-        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+        return dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message)
     
     times, temp, pressure, relhum = [], [], [], []
 
@@ -292,23 +310,20 @@ def create_weather_graphs(starttime, endtime):
     temp_fig.update_layout(template='plotly_dark')
     press_fig.update_layout(template='plotly_dark')
     relhum_fig.update_layout(template='plotly_dark')
-    conn.close()
     return dcc.Graph(figure = temp_fig, style={"height": "100%"}), dcc.Graph(figure = press_fig, style={"height": "100%"}), dcc.Graph(figure = relhum_fig, style={"height": "100%"})
 
 ### GPS PAGE CALCULATION METHODS ###
 
 # Creates GPS graphs of east, north, and up movement given starttime, endtime, & station
 def create_gps_graphs(starttime, endtime, station):
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
+
     query = f"""SELECT timestamp, eastingsf, northingsf, verticalf 
-    FROM gps_data WHERE timestamp >= ? AND timestamp <= ? AND station = ?; """
+    FROM {gps_table} WHERE timestamp >= ? AND timestamp <= ? AND station = ?; """
     query_inputs  = (starttime, endtime, station)
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
+    all_results = query_database(db_name, query, query_inputs)
 
     if not all_results:
-        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+        return dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message)
     
     times, east, north, up = [], [], [], []
     for res in all_results:
@@ -368,7 +383,6 @@ def create_gps_graphs(starttime, endtime, station):
     north_fig.update_layout(template='plotly_dark')
     up_fig.update_layout(template='plotly_dark')
 
-    conn.close()
     return dcc.Graph(figure = east_fig, style={"height": "100%"}), dcc.Graph(figure = north_fig, style={"height": "100%"}), dcc.Graph(figure = up_fig, style={"height": "100%"})
 
 ### HOME PAGE CALCULATION METHODS ###
@@ -381,10 +395,10 @@ def create_psd_five_days(station):
     #endtime = str(date.today())[:10]
     all_results = check_database(station, starttime, endtime)
     if not all_results:
-        return dbc.Label("No data was found")
+        return dbc.Label(error_message)
     stream = create_stream(all_results)
     if not stream:
-        return dbc.Label("No data was found")
+        return dbc.Label(error_message)
     inventory = read_inventory(f"""station_inventories/{station}.xml""")
     return create_psd(stream, inventory)
 
@@ -393,23 +407,21 @@ def read_file(file_name, type = "NA"):
     with open(file_name) as f:
         lines = f.readlines()
         if not lines:
-            return "No files have been downloaded"
+            return "No files have been downloaded."
     log = pd.read_csv(file_name, delim_whitespace=True)
     last = log.tail(200)
     return html.Div(dbc.Table.from_dataframe(last, striped=True, bordered=True,  hover=True,
     responsive=True,), style={"maxHeight": "500px", "overflow": "scroll"},)
 
 ### GPS Visualizations Page Calculation Methods ###
+
+## Creates map with GPS station movements over time
 def get_gps_tracks(start_date, end_date):
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
-
     query = f"""SELECT timestamp, station, currlatitude, 
-    currlongitude, currheight FROM gps_data WHERE timestamp >= ? AND timestamp <= ?; """
+    currlongitude, currheight FROM {gps_table} WHERE timestamp >= ? AND timestamp <= ?; """
     query_inputs = (start_date, end_date)
+    all_results = query_database(db_name, query, query_inputs)
 
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
     df = pd.DataFrame(all_results, columns=['Timestamp', 'Station', 'Latitude', 'Longitude', 'Height'])
 
     fig = px.scatter_mapbox(df, lat="Latitude", lon="Longitude", hover_name="Station", hover_data=["Timestamp", "Height"], color = "Station",
@@ -432,27 +444,22 @@ def get_gps_tracks(start_date, end_date):
     fig.update_traces(marker=dict(
         size = 20
     ),)
-    conn.close()
     fig.update_layout(template='plotly_dark')
     
     return fig
 
 
-
+## Creates angle/distance baseline graphs with respect to a specific station
 def get_baseline_graphs(start_date, end_date, ref_station):
     gps_stations = ast.literal_eval(os.environ["GPS_STATIONS"])
 
     query = f"""SELECT timestamp, station, currlatitude, currlongitude, currheight
-        FROM gps_data WHERE timestamp >= ? AND timestamp <= ? AND station = ?; """
-    
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
+        FROM {gps_table} WHERE timestamp >= ? AND timestamp <= ? AND station = ?; """
+    query_inputs = (start_date, end_date, ref_station)
 
     ##first get all data from reference station
-    query_inputs = (start_date, end_date, ref_station)
-    cur.execute(query, query_inputs)
+    ref_station_locations = query_database(db_name, query, query_inputs)
 
-    ref_station_locations = cur.fetchall()
     ## create a dictionary for fast accesstimes
     ref_station_dict = {}
     for row in ref_station_locations:
@@ -462,16 +469,17 @@ def get_baseline_graphs(start_date, end_date, ref_station):
     for station in gps_stations:
         if station != ref_station:
             query_inputs = (start_date, end_date, station)
-            cur.execute(query, query_inputs)
-            other_station_locs[station] = cur.fetchall()
+            other_station_locs[station] = query_database(db_name, query, query_inputs)
     
-    
-    ## now you have a dict containing locations of other stations
+    ## other_station_locs contains locations of other stations
+
     ## go through and create dataframes for plotting
 
+    #dict for baseline graphs
     df_distance = {'Time': [], 'Distance': [], 'Station': []}
     df_orient = {'Time': [], 'Angle (in degrees)': [], 'Station': []}
-    ## stores how much to subtract for each station
+
+    ## dict for baseline residual graphs
     df_distance_resid = {'Time': [], 'Distance': [], 'Station': []}
     df_orient_resid = {'Time': [], 'Angle (in degrees)': [], 'Station': []}
 
@@ -523,7 +531,7 @@ def get_baseline_graphs(start_date, end_date, ref_station):
     df_orient = pd.DataFrame(df_orient)
 
     if df_distance.empty:
-        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+        return dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message)
 
     fig_distance = px.line(df_distance, x="Time", y="Distance", color="Station")
     fig_orient = px.line(df_orient, x="Time", y="Angle (in degrees)", color="Station")
@@ -574,16 +582,13 @@ def get_baseline_graphs(start_date, end_date, ref_station):
 
 ##Voltage, Current, & Temp. Monitoring Page
 def get_vct(starttime, endtime):
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
     query = f"""SELECT timestamp, station, voltageToBattery, currentToBattery, voltageFrBattery, currentFrBattery, tempInside 
-    FROM sysmon_data WHERE timestamp >= ? AND timestamp <= ?; """
+    FROM {sysmon_table} WHERE timestamp >= ? AND timestamp <= ?; """
     query_inputs  = (starttime, endtime)
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
+    all_results = query_database(db_name, query, query_inputs)
 
     if not all_results:
-        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+        return dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message)
     
     times, stations, v2b, c2b, vFb, cFb, tI = [], [], [], [], [], [], []
     for res in all_results:
@@ -642,19 +647,15 @@ def get_vct(starttime, endtime):
     cFb_fig.update_layout(template='plotly_dark')
     tIb_fig.update_layout(template='plotly_dark')
 
-    conn.close()
     return dcc.Graph(figure = v2b_fig, style={"height": "100%"}), dcc.Graph(figure = vFb_fig, style={"height": "100%"}), dcc.Graph(figure = c2b_fig, style={"height": "100%"}), dcc.Graph(figure = cFb_fig, style={"height": "100%"}), dcc.Graph(figure = tIb_fig, style={"height": "100%"})
 
 
-##Pressure and Humidity Inside the Box
+##Pressure and Humidity Inside the Box Page
 def get_ph(starttime, endtime):
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
     query = f"""SELECT timestamp, station, pressInside, humidInside
-    FROM sysmon_data WHERE timestamp >= ? AND timestamp <= ?; """
+    FROM {sysmon_table} WHERE timestamp >= ? AND timestamp <= ?; """
     query_inputs  = (starttime, endtime)
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
+    all_results = query_database(db_name, query, query_inputs)
 
     if not all_results:
         return dbc.Label("No data was found."), dbc.Label("No data was found.")
@@ -688,21 +689,17 @@ def get_ph(starttime, endtime):
     pIb_fig.update_layout(template='plotly_dark')
     hIb_fig.update_layout(template='plotly_dark')
 
-    conn.close()
     return dcc.Graph(figure = pIb_fig, style={"height": "100%"}), dcc.Graph(figure = hIb_fig, style={"height": "100%"})
 
-## Gyroscope & Acceleration Callbacks
+## Gyroscope & Acceleration Page
 def get_ga(starttime, endtime):
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
     query = f"""SELECT timestamp, station, gyroX, gyroY, gyroZ, accelX, accelY, accelZ
-    FROM sysmon_data WHERE timestamp >= ? AND timestamp <= ?; """
+    FROM {sysmon_table} WHERE timestamp >= ? AND timestamp <= ?; """
     query_inputs  = (starttime, endtime)
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
+    all_results = query_database(db_name, query, query_inputs)
 
     if not all_results:
-        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+        return dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message)
     
     times, stations, gx, gy, gz, ax, ay, az= [], [], [], [], [], [], [], []
     for res in all_results:
@@ -770,22 +767,18 @@ def get_ga(starttime, endtime):
     ay_fig.update_layout(template='plotly_dark')
     az_fig.update_layout(template='plotly_dark')
 
-    conn.close()
     return dcc.Graph(figure = gx_fig, style={"height": "100%"}), dcc.Graph(figure = gy_fig, style={"height": "100%"}), dcc.Graph(figure = gz_fig, style={"height": "100%"}), dcc.Graph(figure = ax_fig, style={"height": "100%"}), dcc.Graph(figure = ay_fig, style={"height": "100%"}), dcc.Graph(figure = az_fig, style={"height": "100%"})
 
 
-## CPU, Memory, & Disk Space Usage
+## CPU, Memory, & Disk Space Usage Page
 def get_cmd(starttime, endtime):
-    conn = sqlite3.connect("database/sqlitedata.db")
-    cur = conn.cursor()
     query = f"""SELECT timestamp, station, cpu, memory, diskspace
-    FROM sysmon_data WHERE timestamp >= ? AND timestamp <= ?; """
+    FROM {sysmon_table} WHERE timestamp >= ? AND timestamp <= ?; """
     query_inputs  = (starttime, endtime)
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
+    all_results = query_database(db_name, query, query_inputs)
 
     if not all_results:
-        return dbc.Label("No data was found."), dbc.Label("No data was found."), dbc.Label("No data was found.")
+        return dbc.Label(error_message), dbc.Label(error_message), dbc.Label(error_message)
     
     times, stations, cpu, mem, disk= [], [], [], [], []
     for res in all_results:
@@ -825,5 +818,4 @@ def get_cmd(starttime, endtime):
     mem_fig.update_layout(template='plotly_dark')
     disk_fig.update_layout(template='plotly_dark')
 
-    conn.close()
     return dcc.Graph(figure = cpu_fig, style={"height": "100%"}), dcc.Graph(figure = mem_fig, style={"height": "100%"}), dcc.Graph(figure = disk_fig, style={"height": "100%"})

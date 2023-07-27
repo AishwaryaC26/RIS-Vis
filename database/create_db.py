@@ -8,9 +8,8 @@ this program.
 import sqlite3
 from sqlite3 import Error
 
-import os
+
 from dotenv import load_dotenv
-import ast
 
 def create_connection(db_file):
     """ create a database connection to a SQLite database """
@@ -39,8 +38,8 @@ conn = create_connection("database/sqlitedata.db")
 
 if __name__ == '__main__':
     load_dotenv()
-    #stations = list(ast.literal_eval(os.environ["SEISMIC_STATIONS"]).keys())
 
+    ## creates seismic_data table
     create_table(conn, """ CREATE TABLE IF NOT EXISTS seismic_data (
     timestamp TEXT,
     station TEXT,
@@ -48,6 +47,7 @@ if __name__ == '__main__':
     PRIMARY KEY (timestamp, station)  
     ); """)
 
+    ## creates weather_data table
     create_table(conn, """ CREATE TABLE IF NOT EXISTS weather_data (
     timestamp TEXT PRIMARY KEY NOT NULL,
     temperature REAL,
@@ -55,6 +55,7 @@ if __name__ == '__main__':
     relhumidity REAL   
     ); """)
 
+    ## creates gps_data table
     create_table(conn, """CREATE TABLE IF NOT EXISTS gps_data (
     timestamp TEXT,
     station TEXT,
@@ -71,6 +72,7 @@ if __name__ == '__main__':
     PRIMARY KEY (timestamp, station)
     ); """)
 
+    ## creates sysmon_data table
     create_table(conn, """CREATE TABLE IF NOT EXISTS sysmon_data (
     timestamp TEXT,
     station TEXT,

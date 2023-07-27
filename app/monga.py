@@ -20,6 +20,7 @@ ay_desc = "This graph displays acceleration in the X direction."
 az_desc = "This graph displays acceleration in the X direction."
 
 
+# method to get all gyroscope/acceleration page elements
 def get_all_monga_elements():
     monga_form = componentbuilder.build_form_component("Gyroscope & Acceleration Data Visualization Form", [], 
                                                      [("Select date range:", "monga_datepicker")], "monga_formsubmitbut", "open-mongaq-button", "mongaq-modal", form_desc, elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)

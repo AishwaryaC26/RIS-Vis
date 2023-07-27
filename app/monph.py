@@ -11,6 +11,7 @@ pib_desc = "This graph displays pressure inside the SGIP over time."
 
 hib_desc = "This graph displays humidity inside the SGIP over time."
 
+# method to get all pressure & humidity page components
 def get_all_monph_elements():
     monph_form = componentbuilder.build_form_component("Pressure & Humidity Data Visualization Form", [], 
                                                      [("Select date range:", "ph_datepicker")], "monph_formsubmitbut", "open-monphq-button", "monphq-modal", form_desc, elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)

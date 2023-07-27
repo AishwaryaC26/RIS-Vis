@@ -1,14 +1,10 @@
-import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, dcc, html, State
+from dash import html
 import elementstyling
-from datetime import date, timedelta 
 import ast, os
 from dotenv import load_dotenv
 import componentbuilder
 
-
-# GPS Visualization Page Elements
 load_dotenv()
 
 gps_stations = ast.literal_eval(os.environ["GPS_STATIONS"])
@@ -31,7 +27,7 @@ length_res_desc = "This graph displays the distance residual between stations fr
 
 angle_res_desc = "This graph displays the bearing residual between stations from the reference station over time."
 
-
+# method to get GPS Visualization Page Elements
 def get_all_gpsvis_elements():
     gps_form = componentbuilder.build_form_component("GPS Tracks Form", [], [("Select date range:", 'gps_vis_datepicker'),], "gpsvis_formsubmitbut", "open-gpsvis1q-button", "gpsvis1-q-modal", tracks_form_desc, elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP, coords)
 

@@ -11,6 +11,7 @@ import componentbuilder
 load_dotenv()
 stations = ast.literal_eval(os.environ["SEISMIC_STATIONS"])
 coords = ast.literal_eval(os.environ["SEISMIC_COORDS"])
+
 #create list of stations from "stations" dict
 stationsoptions = list(stations.keys())
 
@@ -25,6 +26,7 @@ spectrogram_desc = "Spectrograms are created from their corresponding waveform d
 psd_desc = "The power spectral density graph represents the relative amplitudes of frequencies represented within a time range \
     (chosen in the form)."
 
+# method to get all components for seismic page
 def get_all_seismic_elements():
     filter_options = ['DISP', 'VEL', 'ACC']
     seismic_form = componentbuilder.build_form_component("Seismic Data Visualization Form", [("Select seismic station:", stationsoptions, "dropdownseismic"), 

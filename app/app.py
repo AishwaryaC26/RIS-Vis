@@ -1,5 +1,4 @@
 #Plotly Dash related imports
-import dash
 import dash_bootstrap_components as dbc
 from dash import Input, Output, dcc, html, State, no_update, callback_context, ctx
 from trace_updater import TraceUpdater
@@ -15,16 +14,10 @@ import plotly.express as px
 
 #cache and worker related imports
 from flask_caching import Cache
-import redis
-from celery import Celery
 
 #component imports from other files
 import seismic, weather, gps, elementstyling, gpsvis, monvct, monph, monga, monu
 import calculations, componentbuilder
-
-#Obspy (seismic data processing library) imports 
-from obspy.core import UTCDateTime
-from obspy.clients.fdsn import Client
 
 #Environment variables related imports
 import os, ast
@@ -38,10 +31,6 @@ import time
 import pandas as pd
 from datetime import date, timedelta, datetime
 import math
-
-#database imports 
-import sqlite3
-
 import flask
 
 load_dotenv() ## loads variables from environment file
@@ -50,7 +39,7 @@ load_dotenv() ## loads variables from environment file
 redis_host = os.environ['CACHE_REDIS_HOST']
 server = flask.Flask(__name__)
 app = DashProxy(__name__, server = server, transforms=[ServersideOutputTransform(backends=[RedisBackend(host = redis_host)])], external_stylesheets=[dbc.themes.DARKLY, dbc.icons.FONT_AWESOME], suppress_callback_exceptions=True)
-app.title = 'SGIP Data Monitor and Visualizer'
+app.title = 'RIS-Vis'
 app.favicon = "assets/favicon.ico"
 
 ## creates redis cache with configuration described in .env file
@@ -71,7 +60,6 @@ stationsoptions = list(stations.keys())
 # weather coordinates and name from .env file
 weather_coords = ast.literal_eval(os.environ["WEATHER_COORDS"])
 weather_loc_name = os.environ["WEATHER_LOC_NAME"]
-
 
 ## Nav Bar
 main_navbar = dbc.NavbarSimple(
@@ -102,7 +90,7 @@ main_navbar = dbc.NavbarSimple(
             label="System Monitoring",
         ),
     ],
-    brand="MIT Haystack SGIP Data Monitor and Visualizer",
+    brand="RIS-Vis: MIT Haystack SGIP Data Monitor and Visualizer",
     color="primary",
     dark=True,
 )
@@ -112,10 +100,7 @@ content = html.Div(id="page-content")
 app.layout = html.Div([dcc.Location(id="url"), main_navbar, content, dcc.Store(id="storefigresamp"),
         TraceUpdater(id="trace-updater", gdID="waveformgraphgr"),])
 
-
-
 ### Redis Cache Methods ###
-
 @cache.memoize(timeout=3600) ## refreshes hourly
 def get_weather_data():
     print("fetching weather data...")
@@ -139,6 +124,7 @@ def get_weather_data():
     - 'icon': weather image
     - 'description': short description of current conditions
     '''
+
     temp_celsius = weather_ris.temperature('celsius')
     output['current temp'] = temp_celsius['temp']
     output['feels like'] = temp_celsius['feels_like']
@@ -178,6 +164,7 @@ def get_future_weather_data():
     - description_xday: short description of weather conditions
     - temperature_xday: prediction of future temperature
     '''
+
     oneday = date.today() + timedelta(days = 1)
     weather_oneday = weather_ris.get_weather_at(datetime(oneday.year, oneday.month, oneday.day, 12, 0, 0)) 
     output['date_oneday'] = date.today() + timedelta(days = 1)
@@ -208,9 +195,9 @@ def get_future_weather_data():
 
     return output
 
-## creates spectrogram for past 3 days given list of stations
 
-@cache.memoize(timeout=21600)
+## creates spectrograms for past 3 days given list of stations
+@cache.memoize(timeout=21600) ##refreshes every 6 hours
 def create_spec_three_days(stations):
     figs = []
     for station in stations:
@@ -244,7 +231,7 @@ def get_current_weather():
                                          f"""Current Temperature: {allweatherdict["current temp"]} C""", html.Br(),
                                          f"""Feels like: {allweatherdict["feels like"]} C""", html.Br(),
                                       f"""Wind Speed: {allweatherdict["wind speed"]} m/s""", html.Br(), f"""Pressure: {allweatherdict["pressure"]} hPa"""], style={"text-align": "center"})
-    return  dbc.Card([current_weather],  body=True, )
+    return  dbc.Card([current_weather],  body=True,)
 
 
 def get_weather_predictions():
@@ -261,6 +248,8 @@ def get_weather_predictions():
     return dbc.Row([dbc.Col(weather_oneday, style={"text-align": "center"}), dbc.Col(weather_twoday, style={"text-align": "center"}),
                                           dbc.Col(weather_threeday, style={"text-align": "center"}),dbc.Col(weather_fourday, style={"text-align": "center"}),
                                           ])
+
+## creates map component with weather location used in OpenWeatherMap API
 def get_map_component():
     location= weather_coords
     df = pd.DataFrame(location, columns=['Station', 'Latitude', 'Longitude'])
@@ -287,6 +276,8 @@ def get_map_component():
     fig.update_layout(template='plotly_dark')
     return dcc.Graph(figure = fig)
 
+
+## creates full weather row for home page
 def get_weather_row(card_desc):
     weather_row = dbc.Row([dbc.Col([get_current_weather()], width = 3), dbc.Col([get_map_component()], width = 3), dbc.Col([get_weather_predictions()], width = 6)])
     weather_component = html.Div([html.Br(), dbc.Row([dbc.Col(html.H4("Weather Data", className="card-title"), width = 6), 
@@ -306,12 +297,17 @@ def get_weather_row(card_desc):
         html.Br(), ], style=None)
     return weather_component
    
-weather_desc = "The weather data/predictions being used in the SGIP Dashboard are from the OpenWeatherMap API. Data is updated hourly."
+weather_desc = "The weather data/predictions being used in the SGIP Dashboard are from the OpenWeatherMap API. Data is updated hourly." ## description for what should be displayed in weather-information modal
+
 # File Download Section
 
-log_desc = "Log tables show the last 200 files that have been downloaded with respect to seismic data, GPS data, and weather data."
-def get_log_tables(card_desc):
+log_desc = "Log tables show the last 200 files that have been downloaded with respect to seismic data, GPS data, and weather data." ## description for what should be displayed in log-information modal
 
+
+'''
+Returns  Card component with 3 tables (seismic, GPS, weather) with names and dates of files downloaded
+'''
+def get_log_tables(card_desc):
     seismic_log_table = calculations.read_file("logs/seismic_log.txt")
     seismic_data_downloads = dbc.Card([html.H4("Seismic Data Download Table"), html.Br(), seismic_log_table],  body=True)
 
@@ -340,9 +336,10 @@ def get_log_tables(card_desc):
     return full_card
 
 # Seismic Data Section
-## let's replace this to make it easier to understand
 
-spec_desc = "These graphs display summary spectrograms for the last 5 days. Data is updated every 6 hours."
+spec_desc = "These graphs display summary spectrograms for the last 5 days. Data is updated every 6 hours." ##description for seismic information modal component
+
+## builds component to display summary spectrograms for all seismic stations
 def build_summaryspec_component(card_desc):
     num_pages = math.ceil(len(stationsoptions) / 3)
     #card_title_id, open_expand_button_id, close_expand_button_id, modal_body_id, modal_id, graph_div_id, full_card_id, element_styling = None
@@ -414,8 +411,6 @@ def update_seismic_page(submitted, fig, station, start_date, end_date, wavefilt)
 
     return [Serverside(fig), waveform_graph, spectrogram, psd]
 
-
-
 # Weather Page Callbacks
 
 #callback to update temperature, pressure, & humidity graph
@@ -472,7 +467,7 @@ def update_gps_vis_content(start_date, end_date, n_clicks):
 def update_gps_vis_disori_content(refstation, start_date, end_date, n_clicks):
     return calculations.get_baseline_graphs(start_date, end_date, refstation)
 
-##callback to zoom in on point whenever it is clicked
+##callback to zoom in on point on GPS Tracks MapBox whenever it is clicked
 @app.callback(
     Output('gps_animation', 'figure', allow_duplicate=True),
     State('gps_animation', 'figure'),
@@ -487,6 +482,7 @@ def update_y_timeseries(currFigure, clickData):
 
 
 ## System Monitoring Page Callbacks
+
 #CPU, Memory, & Disk space Callback
 @app.callback(
         Output("cu_graph", "children"), 
@@ -524,6 +520,7 @@ def update_sysmon(start, end, n_clicks):
 def update_sysmon(start, end, n_clicks):
     return calculations.get_ph(start, end)
 
+#Gyroscope and Acceleration callback
 @app.callback(
         Output("gx_graph", "children"), 
         Output("gy_graph", "children"), 
@@ -539,6 +536,7 @@ def update_sysmon(start, end, n_clicks):
     return calculations.get_ga(start, end)
 
 # Home Page Callbacks
+
 # Callback to update summary spectrogram
 @app.callback( 
         Output("sumspec1", "children"),
@@ -573,8 +571,8 @@ def update_spec_home_page(station):
     return calculations.create_psd_five_days(station)
 
 
-## Callbacks to handle opening and closing of Description Modals
-@app.callback( ## this is a form one move it later
+## Callbacks to handle opening and closing of Description Modals (the question button)
+@app.callback( 
         Output("monuq-modal", "is_open"), 
         Input("open-monuq-button", "n_clicks"), 
         prevent_initial_call=True,
@@ -582,7 +580,7 @@ def update_spec_home_page(station):
 def open_description(n_clicks):
     return True
 
-@app.callback( ## this is a form one move it later
+@app.callback( 
         Output("mongaq-modal", "is_open"), 
         Input("open-mongaq-button", "n_clicks"), 
         prevent_initial_call=True,
@@ -590,7 +588,7 @@ def open_description(n_clicks):
 def open_description(n_clicks):
     return True
 
-@app.callback( ## this is a form one move it later
+@app.callback( 
         Output("monphq-modal", "is_open"), 
         Input("open-monphq-button", "n_clicks"), 
         prevent_initial_call=True,
@@ -598,7 +596,7 @@ def open_description(n_clicks):
 def open_description(n_clicks):
     return True
 
-@app.callback( ## this is a form one move it later
+@app.callback( 
         Output("monvctq-modal", "is_open"), 
         Input("open-monvctq-button", "n_clicks"), 
         prevent_initial_call=True,
@@ -833,7 +831,6 @@ def open_description(n_clicks):
 def open_description(n_clicks):
     return True
 
-##weather
 @app.callback(
         Output("weather-temp-q-modal", "is_open"), 
         Input("open-weather-tempq-button", "n_clicks"), 
@@ -858,7 +855,6 @@ def open_description(n_clicks):
 def open_description(n_clicks):
     return True
 
-## home page
 @app.callback(
         Output("specsum-q-modal-id", "is_open"), 
         Input("specsum-q-id", "n_clicks"), 
@@ -883,10 +879,6 @@ def open_description(n_clicks):
 def open_description(n_clicks):
     return True
 
-## Description Modals on Forms
-
-# Seismic
-
 @app.callback(
         Output("seismicq-modal", "is_open"), 
         Input("open-seismicq-button", "n_clicks"), 
@@ -894,8 +886,6 @@ def open_description(n_clicks):
 )
 def open_description(n_clicks):
     return True
-
-# GPS
 
 @app.callback(
         Output("gpsq-modal", "is_open"), 
@@ -905,7 +895,6 @@ def open_description(n_clicks):
 def open_description(n_clicks):
     return True
 
-#GPS Vis
 @app.callback(
         Output("gpsvis1-q-modal", "is_open"), 
         Input("open-gpsvis1q-button", "n_clicks"), 
@@ -922,9 +911,6 @@ def open_description(n_clicks):
 def open_description(n_clicks):
     return True
 
-
-#Weather
-
 @app.callback(
         Output("weather-q-modal", "is_open"), 
         Input("open-weatherq-button", "n_clicks"), 
@@ -935,15 +921,18 @@ def open_description(n_clicks):
 
 
 ## Callbacks to handle opening and closing of Expand Modals
+
+## method to make sure overall range of graph stays the same in expansio modal
 def update_axis_ranges(graph):
     if graph and "figure" in graph["props"] and "layout" in graph["props"]["figure"] and "xaxis" in graph["props"]["figure"]["layout"] and "yaxis" in graph["props"]["figure"]["layout"]:
         graph["props"]["figure"]["layout"]["xaxis"]["autorange"] = True
         graph["props"]["figure"]["layout"]["yaxis"]["autorange"] = True
 
+## method to handle expansion of modals 
 def update_expand(ctx, open_button_id, close_button_id, modal_open, modal_graph, page_graph):
     which_inp = ctx.triggered_id if not None else 'No clicks yet'
     if which_inp == open_button_id:
-        if modal_open: ## should never happen but just in case
+        if modal_open: 
             update_axis_ranges(modal_graph)
             return modal_graph, True, None
         else:
@@ -958,8 +947,7 @@ def update_expand(ctx, open_button_id, close_button_id, modal_open, modal_graph,
             return None, False, page_graph
     else:
         return no_update
-
-## CPU, Memory, Disk Space
+    
 @app.callback(
     Output("cu-modal-body", "children"), 
     Output("cu-modal", "is_open"),
@@ -1005,7 +993,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-fu-modal", "close-fu-modal", modal_open, 
                   modal_graph, page_graph)
 
-## Gyroscope
 @app.callback(
     Output("gx-modal-body", "children"), 
     Output("gx-modal", "is_open"),
@@ -1051,7 +1038,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gz-modal", "close-gz-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Acceleration 
 @app.callback(
     Output("ax-modal-body", "children"), 
     Output("ax-modal", "is_open"),
@@ -1097,7 +1083,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-az-modal", "close-az-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Pressure Inside Box
 @app.callback(
     Output("pIb-modal-body", "children"), 
     Output("pIb-modal", "is_open"),
@@ -1113,7 +1098,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-pIb-modal", "close-pIb-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Humidity Inside Box
 @app.callback(
     Output("hIb-modal-body", "children"), 
     Output("hIb-modal", "is_open"),
@@ -1129,7 +1113,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-hIb-modal", "close-hIb-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Voltage to Battery
 @app.callback(
     Output("v2b-modal-body", "children"), 
     Output("v2b-modal", "is_open"),
@@ -1145,7 +1128,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-v2b-modal", "close-v2b-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Voltage from Battery
 @app.callback(
     Output("vFb-modal-body", "children"), 
     Output("vFb-modal", "is_open"),
@@ -1161,7 +1143,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-vFb-modal", "close-vFb-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Current from Battery
 @app.callback(
     Output("cFb-modal-body", "children"), 
     Output("cFb-modal", "is_open"),
@@ -1177,7 +1158,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-cFb-modal", "close-cFb-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Current to Battery
 @app.callback(
     Output("c2b-modal-body", "children"), 
     Output("c2b-modal", "is_open"),
@@ -1193,7 +1173,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-c2b-modal", "close-c2b-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Temperature Inside Box
 @app.callback(
     Output("tIb-modal-body", "children"), 
     Output("tIb-modal", "is_open"),
@@ -1209,7 +1188,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-tIb-modal", "close-tIb-modal", modal_open, 
                   modal_graph, page_graph)
 
-##Open/Close home page spectrogram modals
 @app.callback(
     Output("sumspec-card1-modalbody-id", "children"), 
     Output("sumspec-card1-modal-id", "is_open"),
@@ -1255,7 +1233,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "sumspec-card3-expand-button-id", "sumspec-card3-close-button-id", modal_open, 
                   modal_graph, page_graph)
 
-## Open/Close waveform graph modal
 @app.callback(
     Output("open-waveform-modal-body", "children"), 
     Output("open-waveform-modal", "is_open"),
@@ -1271,7 +1248,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-waveform-button", "close-waveform-button", modal_open, 
                   modal_graph, page_graph)
 
-## Open/Close spectrogram graph modal
 @app.callback(
     Output("open-spec-modal-body", "children"), 
     Output("open-spec-modal", "is_open"),
@@ -1287,7 +1263,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-spec-button", "close-spec-button", modal_open, 
                   modal_graph, page_graph)
 
-## Open/Close PSD graph modal
 @app.callback(
     Output("open-psd-modal-body", "children"), 
     Output("open-psd-modal", "is_open"),
@@ -1303,7 +1278,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-psd-button", "close-psd-button", modal_open, 
                   modal_graph, page_graph)
         
-## Open/close GPS-page east graph
 @app.callback(
     Output("gps-east-modal-body", "children"), 
     Output("gps-east-modal", "is_open"),
@@ -1319,7 +1293,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gps-east-modal", "close-gps-east-modal", modal_open,
                          modal_graph, page_graph)
 
-## Open/close GPS-page north graph
 @app.callback(
     Output("gps-north-modal-body", "children"), 
     Output("gps-north-modal", "is_open"),
@@ -1335,7 +1308,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gps-north-modal", "close-gps-north-modal", modal_open,
                          modal_graph, page_graph)
 
-## Open/close GPS-page up graph
 @app.callback(
     Output("gps-up-modal-body", "children"), 
     Output("gps-up-modal", "is_open"),
@@ -1351,7 +1323,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gps-up-modal", "close-gps-up-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close Weather-temp graph
 @app.callback(
     Output("weather-temp-modal-body", "children"), 
     Output("weather-temp-modal", "is_open"),
@@ -1367,7 +1338,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-weather-temp-modal", "close-weather-temp-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close Weather-pressure graph
 @app.callback(
     Output("weather-press-modal-body", "children"), 
     Output("weather-press-modal", "is_open"),
@@ -1383,7 +1353,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-weather-press-modal", "close-weather-press-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close Weather-rel. humidity graph
 @app.callback(
     Output("weather-hum-modal-body", "children"), 
     Output("weather-hum-modal", "is_open"),
@@ -1399,7 +1368,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-weather-hum-modal", "close-weather-hum-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close GPS visualization animation graph
 @app.callback(
     Output("gpsvis-ani-modal-body", "children"), 
     Output("gpsvis-ani-modal", "is_open"),
@@ -1415,7 +1383,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gpsvis-ani-modal", "close-gpsvis-ani-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close GPS visualization animation #2 graph
 @app.callback(
     Output("gpsvis-ani2-modal-body", "children"), 
     Output("gpsvis-ani2-modal", "is_open"),
@@ -1431,7 +1398,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gpsvis-ani2-modal", "close-gpsvis-ani2-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close GPS visualization baseline length graph
 @app.callback(
     Output("gpsvis-base-modal-body", "children"), 
     Output("gpsvis-base-modal", "is_open"),
@@ -1447,7 +1413,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gpsvis-base-modal", "close-gpsvis-base-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close GPS visualization baseline orientation graph
 @app.callback(
     Output("gpsvis-orient-modal-body", "children"), 
     Output("gpsvis-orient-modal", "is_open"),
@@ -1463,7 +1428,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gpsvis-orient-modal", "close-gpsvis-orient-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close GPS visualization baseline length residual graph
 @app.callback(
     Output("gpsvis-lengthres-modal-body", "children"), 
     Output("gpsvis-lengthres-modal", "is_open"),
@@ -1479,7 +1443,6 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-gpsvis-lengthres-modal", "close-gpsvis-lengthres-modal", modal_open,
                          modal_graph, page_graph)
 
-##Open/close GPS visualization baseline orientation residual graph
 @app.callback(
     Output("gpsvis-orientres-modal-body", "children"), 
     Output("gpsvis-orientres-modal", "is_open"),
@@ -1494,8 +1457,8 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
 def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
     return update_expand(ctx, "open-gpsvis-orientres-modal", "close-gpsvis-orientres-modal", modal_open,
                          modal_graph, page_graph)
-        
-## callback to detrmine page content
+
+## Main website callback to update page content based on navbar selection 
 @app.callback(Output("page-content", "children"), [Input("url", "pathname")])
 def render_page_content(pathname):
     if pathname == "/":
