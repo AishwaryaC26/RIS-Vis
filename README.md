@@ -35,55 +35,46 @@ RIS-Vis was built with an emphasis on making it simple to add/remove components!
 
 Before we discuss how to add/remove components, let's take a tour of the repository:
 
-Here is a 
+Here is the layout of the app section of the repository --> 
 
 ```bash 
-.
-├── README.md
-├── app
-│   ├── Dockerfile
-│   ├── __init__.py
-│   ├── app.py
-│   ├── assets
-│   │   ├── dropdown.css
-│   │   └── favicon.ico
-│   ├── calculations.py
-│   ├── componentbuilder.py
-│   ├── database
-│   ├── elementstyling.py
-│   ├── find_inventories.py
-│   ├── gps.py
-│   ├── gpsvis.py
-│   ├── logs
-│   ├── monga.py
-│   ├── monph.py
-│   ├── monu.py
-│   ├── monvct.py
-│   ├── requirements.txt
-│   ├── seismic.py
-│   ├── station_inventories
-│   │   ├── CONZ.xml
-│   │   ├── ELHT.xml
-│   │   ├── HOO.xml
-│   │   └── NAUS.xml
-│   └── weather.py
-├── backend
-│   ├── Dockerfile
-│   ├── gps_data_pull.py
-│   ├── logmethods.py
-│   ├── main_download.py
-│   ├── requirements.txt
-│   ├── seismic_data_pull.py
-│   └── weather_data_pull.py
+app
+├── Dockerfile
+├── __init__.py
+├── app.py
+├── assets
+│   ├── dropdown.css
+│   └── favicon.ico
+├── calculations.py
+├── componentbuilder.py
 ├── database
-│   ├── create_db.py
-│   └── sqlitedata.db
-├── docker-compose.yml
-└── logs
-    ├── gps_log.txt
-    ├── seismic_log.txt
-    └── weather_log.txt
+├── elementstyling.py
+├── find_inventories.py
+├── gps.py
+├── gpsvis.py
+├── logs
+├── monga.py
+├── monph.py
+├── monu.py
+├── monvct.py
+├── requirements.txt
+├── seismic.py
+├── station_inventories
+│   ├── CONZ.xml
+│   ├── ELHT.xml
+│   ├── HOO.xml
+│   └── NAUS.xml
+└── weather.py
 ```
+
+Within the "app" folder, there is:
+- The Dockerfile: which specifies how to build our app within a Docker container
+- assets: contain .css files used to style the dashboard
+- station_inventories: a folder with XML files containing information about the 4 seismic stations from which data is collected
+- ALL the other files within the directory correspond to a specific page within the web app:
+    -  Ex: app.py contains the main home-page of the site, gps.py contains the GPS Visualization page of the site, seismic.py contains the Seismic page of the website, monph.py contains the page containing pressure & humidity data of the instrument, etc.
+    -  The names of the files directly correspond to the page they represent
+    -  So, if you ever want to edit the layout of a particular page, go to the file corresponding to that page within the app directory!
 
 
 
