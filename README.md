@@ -217,6 +217,42 @@ Consider each of the arguments:
 - spectrogram_desc: description that will go within the question-modal
 - elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP: css styling of the entire component
 
+With just this code, a "Spectrogram" component was created within the seismic page (isn't that exciting?) 
+
+However, more steps are needed to make the component interactive:
+To make the expand and descriptions, the following code is needed in the app.py file:
+<code>
+    @app.callback(
+    Output("open-spec-modal-body", "children"), 
+    Output("open-spec-modal", "is_open"),
+    Output("spectrogramgraph", "children", allow_duplicate=True), 
+    State("spectrogramgraph", "children"), 
+    State("open-spec-modal-body", "children"), 
+    State("open-spec-modal", "is_open"),
+    Input("open-spec-button", "n_clicks"), 
+    Input("close-spec-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, close_button_click):
+    return update_expand(ctx, "open-spec-button", "close-spec-button", modal_open, 
+                  modal_graph, page_graph)
+    </code>
+
+AND
+<code>
+@app.callback(
+        Output("specq-modal", "is_open"), 
+        Input("open-specq-button", "n_clicks"), 
+        prevent_initial_call=True,
+)
+def open_description(n_clicks):
+    return True
+</code>
+
+
+Although I won't explain how this code in general, here's a short 
+
+
 
 
  
