@@ -1,2 +1,3 @@
-# achakrav_reu2023
-Project folder for Aishwarya Chakravarthy
+# RIS-Vis: MIT Haystack SGIP Data Monitor and Visualizer
+
+Built by Aishwarya Chakravarthy
