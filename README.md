@@ -221,6 +221,7 @@ With just this code, a "Spectrogram" component was created within the seismic pa
 
 However, more steps are needed to make the component interactive:
 To make the expand and descriptions, the following code is needed in the app.py file:
+<br>
 <code>
     @app.callback(
     Output("open-spec-modal-body", "children"), 
@@ -237,8 +238,9 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
     return update_expand(ctx, "open-spec-button", "close-spec-button", modal_open, 
                   modal_graph, page_graph)
     </code>
-
+<br>
 AND
+<br>
 <code>
 @app.callback(
         Output("specq-modal", "is_open"), 
@@ -248,14 +250,18 @@ AND
 def open_description(n_clicks):
     return True
 </code>
+<br>
 
+Although I won't explain how this code in detail, here's a short description: 
 
-Although I won't explain how this code in general, here's a short 
+The first callback is used to determine whether to open/close the expand modal. The update_expand method takes care of handling what to return in the callbacks based on whether the button is clicked to close or open the modal. So, when adding a similar callback for your own graph component, make sure to place it below the update_expand method! In fact, if you CONTROL-F "Callbacks to handle opening and closing of Expand Modals" within app.py, that's the best location to put this callback (you'll see many more of the same structure)!
 
+The second callback is used to determine whether to open/close the description modal. The best place to write this callback is the location of "Callbacks to handle opening and closing of Description Modals (the question button)" within app.py.
 
+Of course, when writing these callbacks for your own graph components, you should make sure to replace the ids in this example with the corresponding id within the new component. 
 
+Though I only discussed creation of new graph components, the steps to create a form component are remarkable similar: use any of the pages that have a form to understand how to model this code. If you want to customize your own components differently, feel free to add to componentbuilder.py!
 
- 
  ## Future Steps
 Though RIS-Vis is currently capable of displaying visualizations are useful in evaluating the health of the Ross Ice Shelf, there are still many, many improvements to be made! Plenty of more analysis capabilities can be added: including using machine learning to detect concerning seismic events that could lead to shelf collapse, as well as 3-D visualizations of the movements of the ice shelves over time. It is our hope that RIS-Vis will one day be able to help scientists make conclusions about the health of the Ross Ice Shelf, and possibly create solutions to solve our planet's climate crisis.
  
