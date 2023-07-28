@@ -100,7 +100,7 @@ database
 ├── create_db.py
 └── sqlitedata.db
 ```
-Within the database directory, there are 2 files. <code>createdb.py</code> is used to intialize an empty SQLite3 with the correct table specifications. You might notice, the other file (sqlitedata.db) is not present in the Github. sqlitedata.db stores the entire SQLite database; it is too large to be stored on Github, but it is available on Dropbox. When running the project, download sqlitedata.db from the dropbox and place it within the database directory.
+Within the database directory, there are 2 files. <code>createdb.py</code> is used to intialize an empty SQLite3 database with the correct table specifications. You might notice, the other file (sqlitedata.db) is not present in the Github. sqlitedata.db stores the entire SQLite database; it is too large to be stored on Github, but it is available on Dropbox. When running the project, download sqlitedata.db from the dropbox and place it within the database directory.
 
 ## Database Schema
 Let's quickly discuss the schema of the SQLite3 database. The database contains 4 tables (corresponding to each type of data):
