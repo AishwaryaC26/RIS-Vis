@@ -26,10 +26,12 @@ To stop running RIS-Vis:
 -  Run the command "docker-compose down" on terminal in the project folder directory
 -  To restart the project again, you can simply call "docker-compose up --build"
 
-##Configuration
+## Configuration
 RIS-Vis was built with an emphasis on making it simple to add/remove components!
 
 Before we discuss how to add/remove components, let's take a tour of the repository:
+
+Here is a 
 
 
 
