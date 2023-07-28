@@ -72,9 +72,24 @@ Within the "app" folder, there is:
 - assets: contain .css files used to style the dashboard
 - station_inventories: a folder with XML files containing information about the 4 seismic stations from which data is collected
 - ALL the other files within the directory correspond to a specific page within the web app:
-    -  Ex: app.py contains the main home-page of the site, gps.py contains the GPS Visualization page of the site, seismic.py contains the Seismic page of the website, monph.py contains the page containing pressure & humidity data of the instrument, etc.
+    -  Ex: app.py contains the home-page of the site, gps.py contains the GPS Visualization page of the site, seismic.py contains the Seismic page of the website, monph.py contains the page containing pressure & humidity data of the instrument, etc.
     -  The names of the files directly correspond to the page they represent
     -  So, if you ever want to edit the layout of a particular page, go to the file corresponding to that page within the app directory!
+
+Now let's look at the backend directory:
+Here's another tree visualization -->
+```bash
+backend
+├── Dockerfile
+├── gps_data_pull.py
+├── logmethods.py
+├── main_download.py
+├── requirements.txt
+├── seismic_data_pull.py
+└── weather_data_pull.py
+```
+The back-end directory of the project contains programs to facilitate automatic downloading of seismic, GPS, & weather data as they become available. Though currently, data is being downloaded using the public repositories mentioned above, the sources will eventually change to be from the SGIP. If you were wondering, the programs use the Python library APScheduler to schedule automated downloads of files. In this repository, as you might guess, gps_data_pull.py, seismic_data_pull.py, & weather_data_pull.py contain methods to download data from their corresponding repositories. main_download.py contains the program to organize when the downloads should happen. Finally, logmethods.py contains a method that is used to log what files are downloaded within the logs folder (located in 
+the main directory of the project).
 
 
 
