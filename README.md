@@ -9,6 +9,7 @@ Built by Aishwarya Chakravarthy (MIT Haystack REU 2023)
 - Installation
 - Detailed Description
 - Database Schema
+- Customization
 - Future Steps
 
 ## Introduction
@@ -182,6 +183,45 @@ Table #4: sysmon_data
  </code>
  <br>
  If you've been paying attention, you might notice I didn't really give much information about the system monitoring section of the dashboard. The purpose of the system monitoring page within the dashboard is to give utility information about the SGIP instrument when it is launched (including its temperature, its movement, & its internal hardware). However, as this data is not available, the web dashboard uses simulated data from a previous MIT Haystack mission. Some of its columns represent voltage to the battery of the instrument, the acceleration/gyroscope records, as well as how much memory/diskspace is available for data collection within the SGIP at various points in time. Like the other tables, the primary key of this table is the time of data collection as well as the station (in case there are multiple instruments being monitored using the dashboard).
+ 
+ ## Customization
+ 
+ Let's get to the fun part: how can you customize the SGIP Dashboard to fit your needs?
+ 
+Let's first discuss adding/removing components. An important file to understand that will be immensely useful to add/remove graphs is the componentbuilder.py file located within the app directory. This file is used to create components within all pages of the website, so if you need some guidance, you can look at how it is used to create each page (ex. look at seismic.py).
+ 
+ Within componentbuilder.py, there are 3 main methods: 
+ - build_graph_component: used to create the standard graphs seen on the all visualization pages EXCEPT the home page (includes an expand button + description button)
+ - build_form_component: used to create the graphs seen on the home page (which only have the expand button)
+ - build_form_component: used to create the form inputs within each page (look at any page except the home page)
+
+These methods are all really similar, & have descriptions in componentbuilder.py. Many of them take inputs of ids (which are used for the dash callbacks), as well as the actual text to be displayed within the component.
+
+I believe the best way to understand is to look at an example:
+Let's consider the spectrogram graph within the seismic page -->
+
+Here is the code that creates the component:
+<code>
+spectrogram_graph = componentbuilder.build_graph_component("Spectrogram", "open-spec-button", "close-spec-button", "open-specq-button", "open-spec-modal-body", "open-spec-modal", "spectrogramgraph", "specq-modal", spectrogram_desc, elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP)
+    </code>
+
+Consider each of the arguments:
+- "Spectrogram": the title to be displayed on the graph component
+- "open-spec-button": the id of the button to open the expand modal
+- "close-spec-button": the id of the button to close the expand modal
+- "open-specq-button": the id of the button to open the question modal
+- "open-spec-modal-body": id of the expand-modal body 
+- "open-spec-modal": id of the expand-modal
+- "spectrogramgraph": id of the html.Div component the spectrogram graph will eventually go
+- "specq-modal": id of the question-modal
+- spectrogram_desc: description that will go within the question-modal
+- elementstyling.CARD_HALF_WIDTH_LEFT_DOWNUP: css styling of the entire component
+
+
+
+ 
+ ## Future Steps
+Though RIS-Vis is currently capable of displaying visualizations are useful in evaluating the health of the Ross Ice Shelf, there are still many, many improvements to be made! Plenty of more analysis capabilities can be added: including using machine learning to detect concerning seismic events that could lead to shelf collapse, as well as 3-D visualizations of the movements of the ice shelves over time. It is our hope that RIS-Vis will one day be able to help scientists make conclusions about the health of the Ross Ice Shelf, and possibly create solutions to solve our planet's climate crisis.
  
  
 
