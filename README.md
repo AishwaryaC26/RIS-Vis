@@ -37,7 +37,7 @@ Before we discuss how to add/remove components, let's take a tour of the reposit
 
 Here is a 
 
-'''bash 
+```bash 
 .
 ├── README.md
 ├── app
@@ -83,7 +83,7 @@ Here is a
     ├── gps_log.txt
     ├── seismic_log.txt
     └── weather_log.txt
-'''
+```
 
 
 
