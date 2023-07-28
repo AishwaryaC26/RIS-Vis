@@ -21,10 +21,10 @@ RIS-Vis was built using Python for the front-end and SQLite3 for the backend dat
 
 ## Installation
 To build RIS-Vis on your own computer:
-- Go to your terminal & run "git clone https://github.mit.edu/barrettj/achakrav_reu2023.git" into your preferred location
+- Go to your terminal & run <code> git clone https://github.mit.edu/barrettj/achakrav_reu2023.git </code> into your preferred location
 - Then, within terminal, go to the directory with the repository
-- Run "docker-compose up --build"
-- The web application should run at "http://localhost:8080/"!
+- Run <code> docker-compose up --build </code>
+- The web application should run at http://localhost:8080/!
 
 To stop running RIS-Vis:
 -  Run the command "docker-compose down" on terminal in the project folder directory
