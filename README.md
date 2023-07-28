@@ -103,6 +103,7 @@ Within the database directory, there are 2 files. <code>createdb.py</code> is us
 Let's quickly discuss the schema of the SQLite3 database. The database contains 4 tables (corresponding to each type of data):
 
 Table #1: weather_data
+<br>
 <code>
 CREATE TABLE weather_data (
             timestamp TEXT PRIMARY KEY NOT NULL,
@@ -111,9 +112,11 @@ CREATE TABLE weather_data (
             relhumidity REAL   
             );
     </code>
+   <br>
 The weather_data table contains, as you might guess, weather data. It contains 4 columns: timestamp (representing the time of data collection), and the 3 data points of temperature, pressure, & relative humidity. The time of data collection is the primary key of this table.
 
 Table #2: seismic_data
+<br>
 <code>
     CREATE TABLE seismic_data (
     timestamp TEXT,
@@ -122,6 +125,7 @@ Table #2: seismic_data
     PRIMARY KEY (timestamp, station)  
     );
  </code>
+ <br>
 
 Before we discuss the schema of the seismic_table, let's first discuss how seismic data is stored. Seismic data are stored as ".mseed" files, which are the standard format for seismological data. To store these files within the data table, we convert the file to the BLOB type, so that it is compatible with SQLite. Within the seismic_data table, there are 3 columns: timestamp (the time of data collection), the station (a String corresponding to the name of the seismic station), and the mseed file (stored as a BLOB). The primary key of this table are the timestamp & the station together, as they uniquely identify each row.
 
