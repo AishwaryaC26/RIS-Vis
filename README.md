@@ -7,7 +7,8 @@ Built by Aishwarya Chakravarthy (MIT Haystack REU 2023)
 - Requirements
 - Technologies Used
 - Installation
-- Configuration
+- Detailed Description
+- Database Schema
 - Future Steps
 
 ## Introduction
@@ -21,7 +22,7 @@ RIS-Vis was built using Python for the front-end and SQLite3 for the backend dat
 
 ## Installation
 To build RIS-Vis on your own computer:
-- Go to your terminal & run <code> git clone https://github.mit.edu/barrettj/achakrav_reu2023.git </code> into your preferred location
+- Go to your terminal & run <code> git clone https://github.mit.edu/barrettj/achakrav_reu2023.git</code> into your preferred location
 - Then, within terminal, go to the directory with the repository
 - Run <code> docker-compose up --build </code>
 - The web application should run at http://localhost:8080/!
@@ -30,7 +31,7 @@ To stop running RIS-Vis:
 -  Run the command "docker-compose down" on terminal in the project folder directory
 -  To restart the project again, you can simply call "docker-compose up --build"
 
-## Configuration
+## Detailed Description
 RIS-Vis was built with an emphasis on making it simple to add/remove components!
 
 Before we discuss how to add/remove components, let's take a tour of the repository:
@@ -88,8 +89,41 @@ backend
 ├── seismic_data_pull.py
 └── weather_data_pull.py
 ```
-The back-end directory of the project contains programs to facilitate automatic downloading of seismic, GPS, & weather data as they become available. Though currently, data is being downloaded using the public repositories mentioned above, the sources will eventually change to be from the SGIP. If you were wondering, the programs use the Python library APScheduler to schedule automated downloads of files. In this repository, as you might guess, gps_data_pull.py, seismic_data_pull.py, & weather_data_pull.py contain methods to download data from their corresponding repositories. main_download.py contains the program to organize when the downloads should happen. Finally, logmethods.py contains a method that is used to log what files are downloaded within the logs folder (located in 
-the main directory of the project).
+The back-end directory of the project contains programs to facilitate automatic downloading of seismic, GPS, & weather data as they become available. Though currently, data is being downloaded using the public repositories mentioned above, the sources will eventually change to be from the SGIP. If you were wondering, the programs use the Python library APScheduler to schedule automated downloads of files. In this repository, as you might guess, gps_data_pull.py, seismic_data_pull.py, & weather_data_pull.py contain methods to download data from their corresponding repositories. main_download.py contains the program to organize when the downloads should happen. Finally, logmethods.py contains a method that is used to log what files are downloaded within the logs folder (located in the main directory of the project).
+
+Finally, let's look at the database directory of the project:
+```bash
+database
+├── create_db.py
+└── sqlitedata.db
+```
+Within the database directory, there are 2 files. <code>createdb.py</code> is used to intialize an empty SQLite3 with the correct table specifications. You might notice, the other file (sqlitedata.db) is not present in the Github. sqlitedata.db stores the entire SQLite database; it is too large to be stored on Github, but it is available on Dropbox. When running the project, download sqlitedata.db from the dropbox and place it within the database directory.
+
+## Database Schema
+Let's quickly discuss the schema of the SQLite3 database. The database contains 4 tables (corresponding to each type of data):
+
+Table #1: weather_data
+<code>
+CREATE TABLE weather_data (
+            timestamp TEXT PRIMARY KEY NOT NULL,
+            temperature REAL,
+            pressure REAL, 
+            relhumidity REAL   
+            );
+    </code>
+The weather_data table contains, as you might guess, weather data. It contains 4 columns: timestamp (representing the time of data collection), and the 3 data points of temperature, pressure, & relative humidity. The time of data collection is the primary key of this table.
+
+Table #2: seismic_data
+<code>
+    CREATE TABLE seismic_data (
+    timestamp TEXT,
+    station TEXT,
+    mseed BLOB,
+    PRIMARY KEY (timestamp, station)  
+    );
+ </code>
+
+Before we discuss the schema of the seismic_table, let's first discuss how seismic data is stored. Seismic data are stored as ".mseed" files, which are the standard format for seismological data. To store these files within the data table, we convert the file to the BLOB type, so that it is compatible with SQLite. Within the seismic_data table, there are 3 columns: timestamp (the time of data collection), the station (a String corresponding to the name of the seismic station), and the mseed file (stored as a BLOB). The primary key of this table are the timestamp & the station together, as they uniquely identify each row.
 
 
 
