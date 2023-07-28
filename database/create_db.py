@@ -97,33 +97,6 @@ if __name__ == '__main__':
     diskspace REAL,              
     PRIMARY KEY (timestamp, station)
     ); """)
-
-
-
-    
-
-
-
-    '''
-    for stat in stations:
-    create_table(conn, """ CREATE TABLE IF NOT EXISTS seismic_""" +stat+""" (
-    timestamp TEXT PRIMARY KEY NOT NULL,
-    mseed BLOB  
-    ); """)
-
-    create_table(conn, """ CREATE TABLE IF NOT EXISTS weather_data (
-    timestamp TEXT PRIMARY KEY NOT NULL,
-    temperature REAL,
-    pressure REAL, 
-    relhumidity REAL   
-    ); """)
-
-    create_table(conn, """CREATE TABLE IF NOT EXISTS GPS_FTP4 (
-    timestamp TEXT PRIMARY KEY NOT NULL,
-    east REAL, 
-    north REAL, 
-    up REAL
-    ); """)'''
     
     conn.commit()
     conn.close()

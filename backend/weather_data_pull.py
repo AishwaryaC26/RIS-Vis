@@ -38,17 +38,16 @@ def create_weather_link(year, station, month):
         return f"""{base_link}/{year}/{station}{year}{month}q3h.txt"""
 
 def download_weather_data(conn):
-    ## find the last data available in the database rn
     cur = conn.cursor()
     table_name = weather_table
 
     ##today's date
     today = date.today()
     curr_check = datetime(today.year, today.month, 1, 0, 0, 0)
-
+    ## find the latest data available in the database right now
     init_query = f"""SELECT timestamp FROM {table_name} ORDER BY timestamp DESC LIMIT 1;"""
     cur.execute(init_query)
-    init_res = cur.fetchall() ## list will contain last data available
+    init_res = cur.fetchall() ## list will contain latest data available
     if not init_res:
         init_time = curr_check
     else:

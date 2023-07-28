@@ -60,7 +60,7 @@ def build_graph_component(card_title, open_expand_button_id, close_expand_button
 '''
 This method builds a graph component with ONLY an expand modal
 
-card_title_id: string to be displayed at top of card
+card_title_id: id of card title
 open_expand_button_id: id of button to open expand modal
 close_expand_button_id: id of button to close expand modal
 modal_body_id: id of modal body
