@@ -192,7 +192,7 @@ Schema:
     );
  </code>
  <br>
- If you've been paying attention, you might notice I didn't really give much information about the system monitoring section of the dashboard. The purpose of the system monitoring page within the dashboard is to give utility information about the SGIP instrument when it is launched (including its temperature, its movement, & the health of its internal hardware). However, as this data is obviously not yet available, the web dashboard uses data from a previous MIT Haystack mission. Some of its columns represent voltage to the battery of the instrument, the acceleration/gyroscope records, as well as how much memory/diskspace is available for data collection within the SGIP at various points in time. Like the other tables, the primary key of this table is the time of data collection as well as the station (in case there are multiple instruments being monitored using the dashboard).
+ If you've been paying attention, you might notice I didn't really give much information about the system monitoring section of the dashboard. The purpose of the system monitoring page within the dashboard is to give utility information about the SGIP instrument when it is launched (including its temperature, its movement, & the health of its internal hardware). However, as this data is obviously not yet available, the web dashboard uses data from a previous MIT Haystack mission. Some of its columns represent voltage to the battery of the instrument, the acceleration/gyroscope records, as well as how much memory/diskspace is available for data collection within the SGIP at various points in time. Like the other tables, the primary key of this table is the time of data collection as well as the station.
  
  ## Customization
  
