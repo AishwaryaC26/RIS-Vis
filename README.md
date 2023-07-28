@@ -1,6 +1,6 @@
 # RIS-Vis: MIT Haystack SGIP Data Monitor and Visualizer
 
-Built by Aishwarya Chakravarthy
+Built by Aishwarya Chakravarthy (MIT Haystack REU 2023)
 
 ## Table of contents
 - Introduction
