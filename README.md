@@ -129,8 +129,61 @@ Table #2: seismic_data
 
 Before we discuss the schema of the seismic_table, let's first discuss how seismic data is stored. Seismic data are stored as ".mseed" files, which are the standard format for seismological data. To store these files within the data table, we convert the file to the BLOB type, so that it is compatible with SQLite. Within the seismic_data table, there are 3 columns: timestamp (the time of data collection), the station (a String corresponding to the name of the seismic station), and the mseed file (stored as a BLOB). The primary key of this table are the timestamp & the station together, as they uniquely identify each row.
 
+Table #3: gps_data
+<br>
+<code>
+CREATE TABLE IF NOT EXISTS "gps_data" (
+    timestamp TEXT,
+    station TEXT,
+    eastingsi REAL, 
+    eastingsf REAL, 
+    northingsi REAL,
+    northingsf REAL, 
+    verticali REAL, 
+    verticalf REAL,
+    reflongitude REAL, 
+    currlatitude REAL, 
+    currlongitude REAL, 
+    currheight REAL, 
+    PRIMARY KEY (timestamp, station)
+    );
+</code>
+<br>
 
+The gps_data table, much like the seismic_table, also contains 2 columns corresponding to the time of data collection and station name. The rest of the columns contain a variety of information about the location of the station, including relative east/north/vertical location from a meridian, as well as the longitude, longitude, & height.
 
+Table #4: sysmon_data
+<br>
+<code>
+    CREATE TABLE sysmon_data (
+    timestamp TEXT,
+    station TEXT,
+    voltageToBattery REAL, 
+    currentToBattery REAL, 
+    voltageFrBattery REAL, 
+    currentFrBattery REAL, 
+    tempInside REAL, 
+    pressInside REAL, 
+    humidInside REAL, 
+    tempOutside REAL, 
+    pressOutside REAL, 
+    humidOutside REAL, 
+    gyroX REAL, 
+    gyroY REAL, 
+    gyroZ REAL, 
+    accelX REAL, 
+    accelY REAL, 
+    accelZ REAL, 
+    cpu REAL, 
+    memory REAL,
+    diskspace REAL,              
+    PRIMARY KEY (timestamp, station)
+    );
+ </code>
+ <br>
+ If you've been paying attention, you might notice I didn't really give much information about the system monitoring section of the dashboard. The purpose of the system monitoring page within the dashboard is to give utility information about the SGIP instrument when it is launched (including its temperature, its movement, & its internal hardware). However, as this data is not available, the web dashboard uses simulated data from a previous MIT Haystack mission. Some of its columns represent voltage to the battery of the instrument, the acceleration/gyroscope records, as well as how much memory/diskspace is available for data collection within the SGIP at various points in time. Like the other tables, the primary key of this table is the time of data collection as well as the station (in case there are multiple instruments being monitored using the dashboard).
+ 
+ 
 
 
 
