@@ -388,20 +388,6 @@ def create_gps_graphs(starttime, endtime, station):
 ### HOME PAGE CALCULATION METHODS ###
 
 # creates PSD of seismic data from last 5 days
-def create_psd_five_days(station):
-    starttime = str(date.today() - timedelta(days=365))[:10]
-    endtime = str(date.today() - timedelta(days=360))[:10]
-    #starttime = str(date.today() - timedelta(days=5))[:10]
-    #endtime = str(date.today())[:10]
-    all_results = check_database(station, starttime, endtime)
-    if not all_results:
-        return dbc.Label(error_message)
-    stream = create_stream(all_results)
-    if not stream:
-        return dbc.Label(error_message)
-    inventory = read_inventory(f"""station_inventories/{station}.xml""")
-    return create_psd(stream, inventory)
-
 ## reads log files
 def read_file(file_name, type = "NA"):
     with open(file_name) as f:
