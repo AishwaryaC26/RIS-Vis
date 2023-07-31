@@ -562,14 +562,6 @@ def update_summary_spectrogram(slider_val):
     check3 = {'display':'none'} if not titles[2] else {}
     return graphs[0], graphs[1], graphs[2], titles[0], titles[1], titles[2], check1, check2, check3
 
-# Callback to update summary PSD
-@app.callback(
-        Output("summarypsd", "children"), 
-        Input("dropdownhomeseispsd", "value")
-)
-def update_spec_home_page(station):
-    return calculations.create_psd_five_days(station)
-
 
 ## Callbacks to handle opening and closing of Description Modals (the question button)
 @app.callback( 

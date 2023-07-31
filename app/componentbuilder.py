@@ -4,6 +4,12 @@ import elementstyling
 from datetime import date, timedelta
 import pandas as pd
 import plotly.express as px
+import os, ast
+from dotenv import load_dotenv
+
+load_dotenv()
+time_constant = int(os.environ["TIME_CONSTANT"])
+print(time_constant)
 
 ## Componentbuilder.py facilitates easily building graph/form components
 
@@ -14,8 +20,8 @@ card_title: string that will be displayed on top of the card
 open_expand_button_id: id of expand button on main page to open modal
 close_expand_button_id: id of expand button on modal to close modal
 question_button_id: id of button to open description modal
-modal_body_id: id of modal body
-modal_id: id of modal
+modal_body_id: id of expand-modal body
+modal_id: id of expand-modal
 graph_div_id: id of div component where graph will be located
 question_modal_id: id of modal for description
 card_description: text that will go in description modal (defaults to empty string)
@@ -129,8 +135,10 @@ def build_form_component(card_title, dropdowns, dateranges, submitid, question_b
                 id=id,
                 min_date_allowed=date(1900, 1, 1),
                 max_date_allowed=date.today(),
-                start_date=date.today() - timedelta(10),
-                end_date=date.today()
+                #start_date=date.today() - timedelta(10),
+                #end_date=date.today(), 
+                start_date=date.today() - timedelta(time_constant),
+                end_date=date.today() - timedelta(time_constant - 10)
             )
             ],
         )
