@@ -251,6 +251,7 @@ def handle_open_close(page_graph, modal_graph, modal_open, open_button_click, cl
 <br>
 AND
 <br>
+
 ```
 @app.callback(
         Output("specq-modal", "is_open"), 
@@ -260,6 +261,7 @@ AND
 def open_description(n_clicks):
     return True
 ```
+
 <br>
 
 Although I won't explain how this code works in detail, here's a short description: 
