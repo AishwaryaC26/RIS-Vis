@@ -61,6 +61,15 @@ stationsoptions = list(stations.keys())
 weather_coords = ast.literal_eval(os.environ["WEATHER_COORDS"])
 weather_loc_name = os.environ["WEATHER_LOC_NAME"]
 
+# time subtract constant
+time_constant = int(os.environ["TIME_CONSTANT"])
+
+# error message
+error_message = os.environ["ERROR_MESSAGE"]
+
+# database name
+db_name = os.environ["DATABASE_NAME"]
+
 ## Nav Bar
 main_navbar = dbc.NavbarSimple(
     children=[
@@ -201,19 +210,22 @@ def get_future_weather_data():
 def create_spec_three_days(stations):
     figs = []
     for station in stations:
-        starttime = str(date.today() - timedelta(days=365))[:10]
-        endtime = str(date.today() - timedelta(days=360))[:10]
+        starttime = str(date.today() - timedelta(days=time_constant))[:10]
+        endtime = str(date.today() - timedelta(days=(time_constant - 3)))[:10]
 
         #starttime = str(date.today() - timedelta(days=3))[:10]
         #endtime = str(date.today())[:10]
-        
-        all_results = calculations.check_database(station, starttime, endtime)
+
+        query = f"""SELECT timestamp, mseed FROM seismic_data WHERE timestamp >= ? AND timestamp <= ? AND station == ?;"""
+        query_inputs  = (starttime[:10], endtime[:10], station)
+        all_results = calculations.query_database(db_name, query, query_inputs)
+
         if not all_results:
-            figs.append(dbc.Label("No data was found"))
+            figs.append(dbc.Label(error_message))
             continue
         stream = calculations.create_stream(all_results)
         if not stream:
-            figs.append(dbc.Label("No data was found"))
+            figs.append(dbc.Label(error_message))
             continue
         figs.append(calculations.create_spectrogram(stream))
     while len(figs) < 3:
@@ -301,7 +313,8 @@ weather_desc = "The weather data/predictions being used in the SGIP Dashboard ar
 
 # File Download Section
 
-log_desc = "Log tables show the last 200 files that have been downloaded with respect to seismic data, GPS data, and weather data." ## description for what should be displayed in log-information modal
+log_desc = "Log tables show files that have been downloaded with respect to seismic data, GPS data, and weather data. Download-date corresponds\
+    to the date the data was downloaded, while Data-date corresponds to the date the data was collected." ## description for what should be displayed in log-information modal
 
 
 '''

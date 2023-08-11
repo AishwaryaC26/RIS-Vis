@@ -68,20 +68,6 @@ def writeTofile(data, file):
     file.truncate()
     file.write(data)
 
-# pulls all seismic data corresponding to a specific station, starttime, and endtime
-def check_database(sta, starttime, endtime):
-    db_name = os.environ["DATABASE_NAME"]
-    conn = sqlite3.connect(db_name)
-    cur = conn.cursor()
-
-    query = f"""SELECT timestamp, mseed FROM seismic_data WHERE timestamp >= ? AND timestamp <= ? AND station == ?;"""
-    query_inputs  = (starttime[:10], endtime[:10], sta)
-    cur.execute(query, query_inputs)
-    all_results = cur.fetchall()
-
-    conn.close()
-    return all_results
-
 '''
 Given list of rows pulled from seismic_data database containing
 (timestamp, miniSeed data), creates an Obspy stream object

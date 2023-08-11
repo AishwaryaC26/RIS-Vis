@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 time_constant = int(os.environ["TIME_CONSTANT"])
-print(time_constant)
 
 ## Componentbuilder.py facilitates easily building graph/form components
 
@@ -138,7 +137,7 @@ def build_form_component(card_title, dropdowns, dateranges, submitid, question_b
                 #start_date=date.today() - timedelta(10),
                 #end_date=date.today(), 
                 start_date=date.today() - timedelta(time_constant),
-                end_date=date.today() - timedelta(time_constant - 10)
+                end_date=date.today() - timedelta(time_constant -5)
             )
             ],
         )
