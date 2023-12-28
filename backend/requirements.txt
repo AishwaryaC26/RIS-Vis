@@ -27,7 +27,6 @@ dash-html-components==2.0.0
 dash-table==5.0.0
 dask==2023.6.1
 datashader==0.15.0
-datashape==0.5.2
 debugpy==1.6.7
 decorator==5.1.1
 EasyProcess==1.1
@@ -66,7 +65,6 @@ more-itertools==9.1.0
 multipledispatch==1.0.0
 ncompress==1.0.1
 nest-asyncio==1.5.6
-numba==0.57.1
 numpy==1.24.0
 obspy==1.4.0
 orjson==3.9.1
