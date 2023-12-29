@@ -15,7 +15,7 @@ Built by Aishwarya Chakravarthy (MIT Haystack REU 2023)
 ## Introduction
 RIS-Vis is a web dashboard built with the purpose of helping visualize seismic, geodetic, weather, & system monitoring data from the Seismo-Geodetic Ice Penetrator (SGIP) built by the MIT Haystack Observatory. The SGIP is an instrument with seismic and geodetic sensors embedded that will collect data from the Ross Ice Shelf (in Antarctica) when deployed. Since there is currently no data from the SGIP available (as it has not been launched yet), the web application in this repository uses a variety of publicly available data from the IRIS DMC, the Nevada Geodetic Laboratory, & the University of Wisconsin-Madison Automatic Weather Station database. These sources respectively collect seismic, geodetic, and weather data from locations in Antarctica/the rest of the world, including the Ross Ice Shelf. Features of the dashboard include visualizing spectrograms, power spectral densities, GPS station plots, and many more!
 
-NOTE: (The system monitoring section of RIS-Vis currently displays no data, as the SGIP instrument has not been launched yet, and the proxy data utilized to develop RIS-Vis is proprietary to the MIT Haystack Observatory). The table structure, however, is still present in the sqlite database.
+NOTE: (The system monitoring section of RIS-Vis currently displays no data, as the SGIP instrument has not been launched yet, and the proxy data utilized to develop RIS-Vis is proprietary to the MIT Haystack Observatory). 
 
 ## Requirements
 To run RIS-Vis on your computer, it is necessary to have Docker installed. Please follow the instructions at https://docs.docker.com/get-docker/ to install Docker on your computer.
